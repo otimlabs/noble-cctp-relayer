@@ -219,7 +219,10 @@ func StartProcessor(
 					msg.Updated = time.Now()
 
 					// For v2, fetch message details for Fast Transfer expiration tracking
-					if apiVersion, _ := cfg.Circle.GetAPIVersion(); apiVersion == types.APIVersionV2 {
+					apiVersion, apiErr := cfg.Circle.GetAPIVersion()
+					if apiErr != nil {
+						logger.Debug("Failed to get API version, skipping v2 handling", "error", apiErr)
+					} else if apiVersion == types.APIVersionV2 {
 						msgResp, err := circle.GetAttestationV2Message(
 							cfg.Circle.AttestationBaseURL, logger, msg.SourceTxHash, msg.SourceDomain)
 						if err == nil && msgResp != nil {
@@ -236,7 +239,10 @@ func StartProcessor(
 			}
 
 			// Handle expired Fast Transfer attestations (v2 only)
-			apiVersion, _ := cfg.Circle.GetAPIVersion()
+			apiVersion, apiErr := cfg.Circle.GetAPIVersion()
+			if apiErr != nil {
+				logger.Debug("Failed to get API version for re-attestation check", "error", apiErr)
+			}
 			if apiVersion == types.APIVersionV2 && msg.Status == types.Attested && msg.ExpirationBlock > 0 {
 				destChain, ok := registeredDomains[msg.DestDomain]
 				if ok {
@@ -267,14 +273,21 @@ func StartProcessor(
 								continue
 							}
 
-							// Update with new attestation
+							// Update with new attestation and fetch updated expiration
 							State.Mu.Lock()
 							msg.Attestation = newAttestation.Attestation
 							msg.ReattestCount++
 							msg.LastReattestTime = time.Now()
 							msg.Updated = time.Now()
-							// Note: ExpirationBlock would be updated from extended response if needed
 							State.Mu.Unlock()
+
+							// Fetch updated expiration block from v2 message details
+							if updatedMsg, err := circle.GetAttestationV2Message(
+								cfg.Circle.AttestationBaseURL, logger, msg.SourceTxHash, msg.SourceDomain); err == nil && updatedMsg != nil {
+								State.Mu.Lock()
+								msg.ExpirationBlock = circle.ParseExpirationBlock(updatedMsg.ExpirationBlock)
+								State.Mu.Unlock()
+							}
 
 							logger.Info(fmt.Sprintf("Re-attestation successful for nonce %d", msg.Nonce))
 						} else {

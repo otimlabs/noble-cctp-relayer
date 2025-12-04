@@ -127,6 +127,8 @@ func checkAttestationV1(attestationURL string, logger log.Logger, irisLookupID s
 }
 
 // checkAttestationV2 uses the v2 API: {baseURL}/v2/messages/{sourceDomain}?transactionHash={txHash}
+// Note: V2 API may return multiple messages per transaction. This function returns the first
+// message for backwards compatibility. Use CheckAttestationV2All for multi-message handling.
 func checkAttestationV2(baseURL string, logger log.Logger, txHash string, sourceDomain types.Domain) *types.AttestationResponse {
 	baseURL = normalizeBaseURL(baseURL)
 	txHash = normalizeMessageHash(txHash)
@@ -144,12 +146,38 @@ func checkAttestationV2(baseURL string, logger log.Logger, txHash string, source
 		return nil
 	}
 
+	if len(v2Response.Messages) > 1 {
+		logger.Info(fmt.Sprintf("V2 attestation found %d messages for tx %s, using first", len(v2Response.Messages), txHash))
+	} else {
+		logger.Info(fmt.Sprintf("V2 attestation found for tx %s", txHash))
+	}
+
 	msg := v2Response.Messages[0]
-	logger.Info(fmt.Sprintf("V2 attestation found for tx %s", txHash))
 	return &types.AttestationResponse{
 		Attestation: msg.Attestation,
 		Status:      msg.Status,
 	}
+}
+
+// CheckAttestationV2All fetches all messages for a transaction (v2 API supports multiple per tx)
+func CheckAttestationV2All(baseURL string, logger log.Logger, txHash string, sourceDomain types.Domain) ([]types.MessageResponseV2, error) {
+	baseURL = normalizeBaseURL(baseURL)
+	txHash = normalizeMessageHash(txHash)
+
+	url := fmt.Sprintf("%s/v2/messages/%d?transactionHash=%s", baseURL, sourceDomain, txHash)
+	logger.Debug(fmt.Sprintf("Fetching all v2 messages at %s", url))
+
+	var v2Response types.AttestationResponseV2
+	if err := httpGet(url, &v2Response); err != nil {
+		return nil, err
+	}
+
+	if len(v2Response.Messages) == 0 {
+		return nil, fmt.Errorf("no messages found")
+	}
+
+	logger.Info(fmt.Sprintf("Found %d v2 messages for tx %s", len(v2Response.Messages), txHash))
+	return v2Response.Messages, nil
 }
 
 // GetAttestationV2Message fetches the full v2 message including Fast Transfer expiration details
