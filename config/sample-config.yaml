@@ -117,5 +117,7 @@ circle:
   enable-fast-transfer-monitoring: false # v2: monitor allowance
   reattest-max-retries: 3                # v2: max re-attestation attempts
   expiration-buffer-blocks: 100          # v2: blocks before expiry to re-attest
+  allowance-monitor-token: "USDC"        # v2: token to monitor (default: USDC)
+  allowance-monitor-interval: 30         # v2: polling interval in seconds
 
 processor-worker-count: 16

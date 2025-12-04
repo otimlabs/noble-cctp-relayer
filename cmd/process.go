@@ -180,6 +180,12 @@ func StartProcessor(
 
 		var broadcastMsgs = make(map[types.Domain][]*types.MessageState)
 		var requeue bool
+
+		apiVersion, apiErr := cfg.Circle.GetAPIVersion()
+		if apiErr != nil {
+			logger.Debug("Failed to get API version", "error", apiErr)
+		}
+
 		for _, msg := range tx.Msgs {
 			// if a filter's condition is met, mark as filtered
 			if FilterDisabledCCTPRoutes(cfg, logger, msg) ||
@@ -219,13 +225,12 @@ func StartProcessor(
 					msg.Updated = time.Now()
 
 					// For v2, fetch message details for Fast Transfer expiration tracking
-					apiVersion, apiErr := cfg.Circle.GetAPIVersion()
-					if apiErr != nil {
-						logger.Debug("Failed to get API version, skipping v2 handling", "error", apiErr)
-					} else if apiVersion == types.APIVersionV2 {
+					if apiVersion == types.APIVersionV2 {
 						msgResp, err := circle.GetAttestationV2Message(
 							cfg.Circle.AttestationBaseURL, logger, msg.SourceTxHash, msg.SourceDomain)
-						if err == nil && msgResp != nil {
+						if err != nil {
+							logger.Debug("Failed to fetch v2 message details", "error", err, "txHash", msg.SourceTxHash)
+						} else if msgResp != nil {
 							msg.CctpVersion = msgResp.CctpVersion
 							msg.ExpirationBlock = circle.ParseExpirationBlock(msgResp.ExpirationBlock)
 						}
@@ -239,10 +244,6 @@ func StartProcessor(
 			}
 
 			// Handle expired Fast Transfer attestations (v2 only)
-			apiVersion, apiErr := cfg.Circle.GetAPIVersion()
-			if apiErr != nil {
-				logger.Debug("Failed to get API version for re-attestation check", "error", apiErr)
-			}
 			if apiVersion == types.APIVersionV2 && msg.Status == types.Attested && msg.ExpirationBlock > 0 {
 				destChain, ok := registeredDomains[msg.DestDomain]
 				if ok {
@@ -283,7 +284,9 @@ func StartProcessor(
 
 							// Fetch updated expiration block from v2 message details
 							if updatedMsg, err := circle.GetAttestationV2Message(
-								cfg.Circle.AttestationBaseURL, logger, msg.SourceTxHash, msg.SourceDomain); err == nil && updatedMsg != nil {
+								cfg.Circle.AttestationBaseURL, logger, msg.SourceTxHash, msg.SourceDomain); err != nil {
+								logger.Info("Failed to fetch updated expiration after re-attestation", "nonce", msg.Nonce, "error", err)
+							} else if updatedMsg != nil {
 								State.Mu.Lock()
 								msg.ExpirationBlock = circle.ParseExpirationBlock(updatedMsg.ExpirationBlock)
 								State.Mu.Unlock()

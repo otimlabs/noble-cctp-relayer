@@ -29,9 +29,11 @@ type CircleSettings struct {
 	FetchRetryInterval int    `yaml:"fetch-retry-interval"`
 
 	// V2/Fast Transfer settings
-	EnableFastTransferMonitoring bool `yaml:"enable-fast-transfer-monitoring"`
-	ReattestMaxRetries           int  `yaml:"reattest-max-retries"`
-	ExpirationBufferBlocks       int  `yaml:"expiration-buffer-blocks"`
+	EnableFastTransferMonitoring bool   `yaml:"enable-fast-transfer-monitoring"`
+	ReattestMaxRetries           int    `yaml:"reattest-max-retries"`
+	ExpirationBufferBlocks       int    `yaml:"expiration-buffer-blocks"`
+	AllowanceMonitorToken        string `yaml:"allowance-monitor-token"`    // v2: token to monitor (default: USDC)
+	AllowanceMonitorInterval     int    `yaml:"allowance-monitor-interval"` // v2: polling interval in seconds (default: 30)
 }
 
 // GetAPIVersion returns the parsed API version

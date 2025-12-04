@@ -57,15 +57,24 @@ type AllowanceMonitor struct {
 	interval time.Duration
 }
 
-func NewAllowanceMonitor(baseURL string, logger log.Logger, domains []types.Domain, metrics *relayer.PromMetrics) *AllowanceMonitor {
+func NewAllowanceMonitor(cfg types.CircleSettings, logger log.Logger, domains []types.Domain, metrics *relayer.PromMetrics) *AllowanceMonitor {
+	token := cfg.AllowanceMonitorToken
+	if token == "" {
+		token = "USDC"
+	}
+	interval := cfg.AllowanceMonitorInterval
+	if interval <= 0 {
+		interval = 30
+	}
+
 	return &AllowanceMonitor{
-		baseURL:  baseURL,
+		baseURL:  cfg.AttestationBaseURL,
 		logger:   logger.With("component", "allowance-monitor"),
 		metrics:  metrics,
 		state:    NewAllowanceState(),
 		domains:  domains,
-		token:    "USDC",
-		interval: 30 * time.Second,
+		token:    token,
+		interval: time.Duration(interval) * time.Second,
 	}
 }
 
@@ -122,7 +131,7 @@ func StartAllowanceMonitor(ctx context.Context, cfg types.CircleSettings, logger
 		return nil
 	}
 
-	monitor := NewAllowanceMonitor(cfg.AttestationBaseURL, logger, domains, metrics)
+	monitor := NewAllowanceMonitor(cfg, logger, domains, metrics)
 	go monitor.Start(ctx)
 	return monitor
 }
