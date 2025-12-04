@@ -2,6 +2,8 @@ package circle
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -10,6 +12,15 @@ import (
 	"github.com/strangelove-ventures/noble-cctp-relayer/relayer"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
+
+// parseAllowance converts allowance string to float64 (USDC with 6 decimals)
+func parseAllowance(s string) (float64, error) {
+	val, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return float64(val) / 1e6, nil // Convert from smallest unit to USDC
+}
 
 // AllowanceState stores Fast Transfer allowance state per domain
 type AllowanceState struct {
@@ -88,6 +99,13 @@ func (m *AllowanceMonitor) queryAllowances() {
 			continue
 		}
 		m.state.Set(domain, allowance)
+
+		// Export to Prometheus
+		if m.metrics != nil && allowance.Allowance != "" {
+			if val, err := parseAllowance(allowance.Allowance); err == nil {
+				m.metrics.SetFastTransferAllowance(fmt.Sprintf("%d", domain), m.token, val)
+			}
+		}
 	}
 }
 
