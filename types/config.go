@@ -24,8 +24,19 @@ type ConfigWrapper struct {
 
 type CircleSettings struct {
 	AttestationBaseURL string `yaml:"attestation-base-url"`
+	APIVersion         string `yaml:"api-version"`
 	FetchRetries       int    `yaml:"fetch-retries"`
 	FetchRetryInterval int    `yaml:"fetch-retry-interval"`
+
+	// V2/Fast Transfer settings
+	EnableFastTransferMonitoring bool `yaml:"enable-fast-transfer-monitoring"`
+	ReattestMaxRetries           int  `yaml:"reattest-max-retries"`
+	ExpirationBufferBlocks       int  `yaml:"expiration-buffer-blocks"`
+}
+
+// GetAPIVersion returns the parsed API version
+func (c *CircleSettings) GetAPIVersion() (APIVersion, error) {
+	return ParseAPIVersion(c.APIVersion)
 }
 
 type ChainConfig interface {

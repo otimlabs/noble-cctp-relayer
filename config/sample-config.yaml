@@ -111,7 +111,11 @@ enabled-routes:
 
 circle:
   attestation-base-url: "https://iris-api-sandbox.circle.com/attestations/"
+  api-version: "v1"                      # "v1" or "v2"
   fetch-retries: 30 # additional times to fetch an attestation
   fetch-retry-interval: 3 # time between retries in seconds
+  enable-fast-transfer-monitoring: false # v2: monitor allowance
+  reattest-max-retries: 3                # v2: max re-attestation attempts
+  expiration-buffer-blocks: 100          # v2: blocks before expiry to re-attest
 
 processor-worker-count: 16

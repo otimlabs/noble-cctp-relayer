@@ -47,6 +47,13 @@ type MessageState struct {
 	Created           time.Time
 	Updated           time.Time
 	Nonce             uint64
+
+	// V2/Fast Transfer fields
+	CctpVersion       string
+	ExpirationBlock   uint64 // destination chain block when attestation expires
+	FinalityThreshold uint32
+	ReattestCount     int
+	LastReattestTime  time.Time
 }
 
 // EvmLogToMessageState transforms an evm log into a messageState given an ABI
@@ -96,5 +103,9 @@ func (m *MessageState) Equal(other *MessageState) bool {
 		bytes.Equal(m.DestinationCaller, other.DestinationCaller) &&
 		m.Channel == other.Channel &&
 		m.Created == other.Created &&
-		m.Updated == other.Updated)
+		m.Updated == other.Updated &&
+		m.CctpVersion == other.CctpVersion &&
+		m.ExpirationBlock == other.ExpirationBlock &&
+		m.FinalityThreshold == other.FinalityThreshold &&
+		m.ReattestCount == other.ReattestCount)
 }
