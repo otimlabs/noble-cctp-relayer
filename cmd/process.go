@@ -219,10 +219,13 @@ func StartProcessor(
 					continue
 				case response.Status == "complete":
 					logger.Debug("Attestation is complete for 0x" + msg.IrisLookupID + ".")
+
+					// Update state under lock
 					State.Mu.Lock()
 					msg.Status = types.Attested
 					msg.Attestation = response.Attestation
 					msg.Updated = time.Now()
+					State.Mu.Unlock()
 
 					// For v2, fetch message details for Fast Transfer expiration tracking
 					if apiVersion == types.APIVersionV2 {
@@ -231,13 +234,14 @@ func StartProcessor(
 						if err != nil {
 							logger.Debug("Failed to fetch v2 message details", "error", err, "txHash", msg.SourceTxHash)
 						} else if msgResp != nil {
+							State.Mu.Lock()
 							msg.CctpVersion = msgResp.CctpVersion
 							msg.ExpirationBlock = circle.ParseExpirationBlock(msgResp.ExpirationBlock)
+							State.Mu.Unlock()
 						}
 					}
 
 					broadcastMsgs[msg.DestDomain] = append(broadcastMsgs[msg.DestDomain], msg)
-					State.Mu.Unlock()
 				default:
 					logger.Error("Attestation failed for unknown reason for 0x" + msg.IrisLookupID + ".  Status: " + response.Status)
 				}
@@ -248,7 +252,12 @@ func StartProcessor(
 				destChain, ok := registeredDomains[msg.DestDomain]
 				if ok {
 					currentBlock := destChain.LatestBlock()
-					bufferBlocks := uint64(cfg.Circle.ExpirationBufferBlocks)
+
+					// Clamp negative config values to zero before uint64 cast
+					bufferBlocks := uint64(0)
+					if cfg.Circle.ExpirationBufferBlocks > 0 {
+						bufferBlocks = uint64(cfg.Circle.ExpirationBufferBlocks)
+					}
 
 					// Check if attestation is expiring soon
 					if currentBlock+bufferBlocks >= msg.ExpirationBlock {
@@ -270,6 +279,22 @@ func StartProcessor(
 								msg.ReattestCount++
 								msg.LastReattestTime = time.Now()
 								State.Mu.Unlock()
+
+								// Remove from broadcast queue to avoid sending with expired attestation
+								if domainMsgs, exists := broadcastMsgs[msg.DestDomain]; exists {
+									filtered := domainMsgs[:0]
+									for _, m := range domainMsgs {
+										if m != msg {
+											filtered = append(filtered, m)
+										}
+									}
+									if len(filtered) == 0 {
+										delete(broadcastMsgs, msg.DestDomain)
+									} else {
+										broadcastMsgs[msg.DestDomain] = filtered
+									}
+								}
+
 								requeue = true
 								continue
 							}
