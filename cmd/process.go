@@ -294,6 +294,11 @@ func StartProcessor(
 							logger.Error("Max re-attestation attempts reached",
 								"nonce", msg.Nonce,
 								"attempts", msg.ReattestCount)
+							State.Mu.Lock()
+							msg.Status = types.Failed
+							msg.Updated = time.Now()
+							State.Mu.Unlock()
+							continue
 						}
 					}
 				}
