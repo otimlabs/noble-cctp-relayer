@@ -1,16 +1,8 @@
-name: Lint and Test
+name: Lint and run unit tests
 
 on:
-  push:
-    paths:
-      - "**/*.go"
-      - "go.mod"
-      - "go.sum"
   pull_request:
-    paths:
-      - "**/*.go"
-      - "go.mod"
-      - "go.sum"
+    paths: ["**/*.go", "go.mod", "go.sum"]
 
 permissions:
   contents: read
