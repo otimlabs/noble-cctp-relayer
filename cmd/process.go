@@ -245,93 +245,50 @@ func StartProcessor(
 				default:
 					logger.Error("Attestation failed for unknown reason for 0x" + msg.IrisLookupID + ".  Status: " + response.Status)
 				}
-			}
+		}
 
-			// Handle expired Fast Transfer attestations (v2 only)
-			if apiVersion == types.APIVersionV2 && msg.Status == types.Attested && msg.ExpirationBlock > 0 {
-				destChain, ok := registeredDomains[msg.DestDomain]
-				if ok {
-					currentBlock := destChain.LatestBlock()
+		// Handle expired Fast Transfer attestations (v2 only)
+		if apiVersion == types.APIVersionV2 && msg.Status == types.Attested && msg.ExpirationBlock > 0 {
+			destChain, ok := registeredDomains[msg.DestDomain]
+			if ok {
+				currentBlock := destChain.LatestBlock()
 
-					// Clamp negative config values to zero before uint64 cast
-					bufferBlocks := uint64(0)
-					if cfg.Circle.ExpirationBufferBlocks > 0 {
-						bufferBlocks = uint64(cfg.Circle.ExpirationBufferBlocks)
-					}
+				result, err := handleExpiringAttestation(msg, cfg.Circle, currentBlock, logger)
+				if err != nil {
+					logger.Error("Re-attestation handling failed", "nonce", msg.Nonce, "error", err)
+				}
 
-					// Check if attestation is expiring soon
-					if currentBlock+bufferBlocks >= msg.ExpirationBlock {
-						if msg.ReattestCount < cfg.Circle.ReattestMaxRetries {
-							logger.Info(fmt.Sprintf(
-								"Fast Transfer attestation expiring soon for nonce %d (current: %d, expires: %d), requesting re-attestation",
-								msg.Nonce, currentBlock, msg.ExpirationBlock))
+				// Apply result to message state
+				State.Mu.Lock()
+				applyReattestResult(msg, result)
+				State.Mu.Unlock()
 
-							newAttestation, err := circle.RequestReattestation(
-								cfg.Circle.AttestationBaseURL,
-								logger,
-								msg.SourceDomain,
-								msg.Nonce,
-							)
-
-							if err != nil {
-								logger.Error("Re-attestation failed", "nonce", msg.Nonce, "error", err)
-								State.Mu.Lock()
-								msg.ReattestCount++
-								msg.LastReattestTime = time.Now()
-								State.Mu.Unlock()
-
-								// Remove from broadcast queue to avoid sending with expired attestation
-								if domainMsgs, exists := broadcastMsgs[msg.DestDomain]; exists {
-									filtered := domainMsgs[:0]
-									for _, m := range domainMsgs {
-										if m != msg {
-											filtered = append(filtered, m)
-										}
-									}
-									if len(filtered) == 0 {
-										delete(broadcastMsgs, msg.DestDomain)
-									} else {
-										broadcastMsgs[msg.DestDomain] = filtered
-									}
-								}
-
-								requeue = true
-								continue
+				// Remove from broadcast queue if needed
+				if result.RemoveFromQueue {
+					if domainMsgs, exists := broadcastMsgs[msg.DestDomain]; exists {
+						filtered := domainMsgs[:0]
+						for _, m := range domainMsgs {
+							if m != msg {
+								filtered = append(filtered, m)
 							}
-
-							// Update with new attestation and fetch updated expiration
-							State.Mu.Lock()
-							msg.Attestation = newAttestation.Attestation
-							msg.ReattestCount++
-							msg.LastReattestTime = time.Now()
-							msg.Updated = time.Now()
-							State.Mu.Unlock()
-
-							// Fetch updated expiration block from v2 message details
-							if updatedMsg, err := circle.GetAttestationV2Message(
-								cfg.Circle.AttestationBaseURL, logger, msg.SourceTxHash, msg.SourceDomain); err != nil {
-								logger.Info("Failed to fetch updated expiration after re-attestation", "nonce", msg.Nonce, "error", err)
-							} else if updatedMsg != nil {
-								State.Mu.Lock()
-								msg.ExpirationBlock = circle.ParseExpirationBlock(updatedMsg.ExpirationBlock)
-								State.Mu.Unlock()
-							}
-
-							logger.Info(fmt.Sprintf("Re-attestation successful for nonce %d", msg.Nonce))
+						}
+						if len(filtered) == 0 {
+							delete(broadcastMsgs, msg.DestDomain)
 						} else {
-							logger.Error("Max re-attestation attempts reached",
-								"nonce", msg.Nonce,
-								"attempts", msg.ReattestCount)
-							State.Mu.Lock()
-							msg.Status = types.Failed
-							msg.Updated = time.Now()
-							State.Mu.Unlock()
-							continue
+							broadcastMsgs[msg.DestDomain] = filtered
 						}
 					}
+					requeue = true
+					continue
+				}
+
+				// Skip broadcast if exhausted retries
+				if result.ExhaustedRetries {
+					continue
 				}
 			}
 		}
+	}
 
 		// if the message is attested to, try to broadcast
 		for domain, msgs := range broadcastMsgs {

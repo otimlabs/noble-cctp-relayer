@@ -13,13 +13,13 @@ import (
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
-// parseAllowance converts allowance string to float64 (USDC with 6 decimals)
+// parseAllowance converts allowance string from smallest unit to token value (6 decimals)
 func parseAllowance(s string) (float64, error) {
 	val, err := strconv.ParseUint(s, 10, 64)
 	if err != nil {
 		return 0, err
 	}
-	return float64(val) / 1e6, nil // Convert from smallest unit to USDC
+	return float64(val) / 1e6, nil
 }
 
 // AllowanceState stores Fast Transfer allowance state per domain
@@ -118,7 +118,8 @@ func (m *AllowanceMonitor) queryAllowances() {
 	}
 }
 
-// StartAllowanceMonitor starts a background allowance monitor if v2 is enabled
+// StartAllowanceMonitor starts background monitoring if v2 API and monitoring are enabled.
+// Returns nil if disabled, otherwise returns monitor instance running in background goroutine.
 func StartAllowanceMonitor(ctx context.Context, cfg types.CircleSettings, logger log.Logger, domains []types.Domain, metrics *relayer.PromMetrics) *AllowanceMonitor {
 	apiVersion, err := cfg.GetAPIVersion()
 	if err != nil || apiVersion != types.APIVersionV2 {

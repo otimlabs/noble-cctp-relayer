@@ -201,5 +201,10 @@ func (a *AppState) validateCircleConfig() error {
 		return fmt.Errorf("FetchRetryInterval must be greater than zero in the config")
 	}
 
+	// Validate v2-specific settings
+	if err := a.Config.Circle.Validate(); err != nil {
+		return fmt.Errorf("Circle config validation failed: %w", err)
+	}
+
 	return nil
 }

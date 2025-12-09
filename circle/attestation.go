@@ -17,7 +17,7 @@ import (
 
 const httpTimeout = 5 * time.Second
 
-// httpGet performs a GET request and unmarshals the JSON response
+// httpGet performs a GET request with timeout and unmarshals JSON response.
 func httpGet(url string, result any) error {
 	ctx, cancel := context.WithTimeout(context.Background(), httpTimeout)
 	defer cancel()
@@ -45,7 +45,7 @@ func httpGet(url string, result any) error {
 	return json.Unmarshal(body, result)
 }
 
-// httpPost performs a POST request and unmarshals the JSON response
+// httpPost performs a POST request with timeout and unmarshals JSON response.
 func httpPost(url string, result any) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -74,7 +74,7 @@ func httpPost(url string, result any) error {
 	return json.Unmarshal(body, result)
 }
 
-// normalizeMessageHash ensures the message hash has 0x prefix
+// normalizeMessageHash adds 0x prefix if missing.
 func normalizeMessageHash(hash string) string {
 	if len(hash) > 2 && hash[:2] != "0x" {
 		return "0x" + hash
@@ -82,13 +82,13 @@ func normalizeMessageHash(hash string) string {
 	return hash
 }
 
-// normalizeBaseURL removes trailing slashes and /attestations suffix for v2
+// normalizeBaseURL strips trailing slashes and /attestations suffix for v2 compatibility.
 func normalizeBaseURL(url string) string {
 	url = strings.TrimSuffix(url, "/")
 	return strings.TrimSuffix(url, "/attestations")
 }
 
-// CheckAttestation checks the Circle Iris API for attestation status
+// CheckAttestation fetches attestation from Circle API using v1 or v2 endpoint based on config.
 func CheckAttestation(cfg types.CircleSettings, logger log.Logger, irisLookupID, txHash string, sourceDomain, destDomain types.Domain) *types.AttestationResponse {
 	version, err := cfg.GetAPIVersion()
 	if err != nil {
@@ -106,7 +106,7 @@ func CheckAttestation(cfg types.CircleSettings, logger log.Logger, irisLookupID,
 	}
 }
 
-// checkAttestationV1 uses the legacy v1 API: {baseURL}/{messageHash}
+// checkAttestationV1 queries v1 API: GET {baseURL}/{messageHash}
 func checkAttestationV1(attestationURL string, logger log.Logger, irisLookupID string) *types.AttestationResponse {
 	if attestationURL[len(attestationURL)-1:] != "/" {
 		attestationURL += "/"
@@ -126,9 +126,8 @@ func checkAttestationV1(attestationURL string, logger log.Logger, irisLookupID s
 	return &response
 }
 
-// checkAttestationV2 uses the v2 API: {baseURL}/v2/messages/{sourceDomain}?transactionHash={txHash}
-// Note: V2 API may return multiple messages per transaction. This function returns the first
-// message for backwards compatibility. Use CheckAttestationV2All for multi-message handling.
+// checkAttestationV2 queries v2 API: GET {baseURL}/v2/messages/{sourceDomain}?transactionHash={txHash}
+// Returns first message for backward compatibility. Use CheckAttestationV2All for multiple messages.
 func checkAttestationV2(baseURL string, logger log.Logger, txHash string, sourceDomain types.Domain) *types.AttestationResponse {
 	baseURL = normalizeBaseURL(baseURL)
 	txHash = normalizeMessageHash(txHash)
@@ -159,7 +158,7 @@ func checkAttestationV2(baseURL string, logger log.Logger, txHash string, source
 	}
 }
 
-// CheckAttestationV2All fetches all messages for a transaction (v2 API supports multiple per tx)
+// CheckAttestationV2All fetches all messages for a transaction from v2 API.
 func CheckAttestationV2All(baseURL string, logger log.Logger, txHash string, sourceDomain types.Domain) ([]types.MessageResponseV2, error) {
 	baseURL = normalizeBaseURL(baseURL)
 	txHash = normalizeMessageHash(txHash)
@@ -180,7 +179,7 @@ func CheckAttestationV2All(baseURL string, logger log.Logger, txHash string, sou
 	return v2Response.Messages, nil
 }
 
-// GetAttestationV2Message fetches the full v2 message including Fast Transfer expiration details
+// GetAttestationV2Message fetches full v2 message details
 func GetAttestationV2Message(baseURL string, logger log.Logger, txHash string, sourceDomain types.Domain) (*types.MessageResponseV2, error) {
 	baseURL = normalizeBaseURL(baseURL)
 	txHash = normalizeMessageHash(txHash)
@@ -200,7 +199,7 @@ func GetAttestationV2Message(baseURL string, logger log.Logger, txHash string, s
 	return &v2Response.Messages[0], nil
 }
 
-// CheckFastTransferAllowance queries the Fast Transfer allowance for a domain
+// CheckFastTransferAllowance queries v2 API for remaining Fast Transfer capacity.
 func CheckFastTransferAllowance(baseURL string, logger log.Logger, sourceDomain types.Domain, token string) (*types.FastTransferAllowance, error) {
 	baseURL = normalizeBaseURL(baseURL)
 	url := fmt.Sprintf("%s/v2/fastBurn/%s/allowance?sourceDomain=%d", baseURL, token, sourceDomain)
@@ -236,7 +235,7 @@ func RequestReattestation(baseURL string, logger log.Logger, sourceDomain types.
 	}, nil
 }
 
-// ParseExpirationBlock parses the expiration block string to uint64
+// ParseExpirationBlock converts expiration block string to uint64, returns 0 on error.
 func ParseExpirationBlock(expirationBlock string) uint64 {
 	if expirationBlock == "" {
 		return 0
