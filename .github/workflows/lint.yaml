@@ -1,27 +1,22 @@
-name: Lint
+name: Lint and Test
+
 on:
   push:
-    branches:
-      - main
     paths:
       - "**/*.go"
       - "go.mod"
       - "go.sum"
-      - "**/go.mod"
-      - "**/go.sum"
   pull_request:
     paths:
       - "**/*.go"
       - "go.mod"
       - "go.sum"
-      - "**/go.mod"
-      - "**/go.sum"
-  merge_group:
+
 permissions:
   contents: read
+
 jobs:
-  golangci:
-    name: golangci-lint
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,6 +24,17 @@ jobs:
         with:
           go-version: "1.21"
           check-latest: true
-      - name: run linting
-        run: |
-          make lint
+
+      - name: Lint
+        run: make lint
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+          check-latest: true
+      - name: Test
+        run: make test

@@ -203,7 +203,7 @@ func (a *AppState) validateCircleConfig() error {
 
 	// Validate v2-specific settings
 	if err := a.Config.Circle.Validate(); err != nil {
-		return fmt.Errorf("Circle config validation failed: %w", err)
+		return fmt.Errorf("circle config validation failed: %w", err)
 	}
 
 	return nil

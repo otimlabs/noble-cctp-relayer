@@ -245,50 +245,50 @@ func StartProcessor(
 				default:
 					logger.Error("Attestation failed for unknown reason for 0x" + msg.IrisLookupID + ".  Status: " + response.Status)
 				}
-		}
+			}
 
-		// Handle expired Fast Transfer attestations (v2 only)
-		if apiVersion == types.APIVersionV2 && msg.Status == types.Attested && msg.ExpirationBlock > 0 {
-			destChain, ok := registeredDomains[msg.DestDomain]
-			if ok {
-				currentBlock := destChain.LatestBlock()
+			// Handle expired Fast Transfer attestations (v2 only)
+			if apiVersion == types.APIVersionV2 && msg.Status == types.Attested && msg.ExpirationBlock > 0 {
+				destChain, ok := registeredDomains[msg.DestDomain]
+				if ok {
+					currentBlock := destChain.LatestBlock()
 
-				result, err := handleExpiringAttestation(msg, cfg.Circle, currentBlock, logger)
-				if err != nil {
-					logger.Error("Re-attestation handling failed", "nonce", msg.Nonce, "error", err)
-				}
+					result, err := handleExpiringAttestation(msg, cfg.Circle, currentBlock, logger)
+					if err != nil {
+						logger.Error("Re-attestation handling failed", "nonce", msg.Nonce, "error", err)
+					}
 
-				// Apply result to message state
-				State.Mu.Lock()
-				applyReattestResult(msg, result)
-				State.Mu.Unlock()
+					// Apply result to message state
+					State.Mu.Lock()
+					applyReattestResult(msg, result)
+					State.Mu.Unlock()
 
-				// Remove from broadcast queue if needed
-				if result.RemoveFromQueue {
-					if domainMsgs, exists := broadcastMsgs[msg.DestDomain]; exists {
-						filtered := domainMsgs[:0]
-						for _, m := range domainMsgs {
-							if m != msg {
-								filtered = append(filtered, m)
+					// Remove from broadcast queue if needed
+					if result.RemoveFromQueue {
+						if domainMsgs, exists := broadcastMsgs[msg.DestDomain]; exists {
+							filtered := domainMsgs[:0]
+							for _, m := range domainMsgs {
+								if m != msg {
+									filtered = append(filtered, m)
+								}
+							}
+							if len(filtered) == 0 {
+								delete(broadcastMsgs, msg.DestDomain)
+							} else {
+								broadcastMsgs[msg.DestDomain] = filtered
 							}
 						}
-						if len(filtered) == 0 {
-							delete(broadcastMsgs, msg.DestDomain)
-						} else {
-							broadcastMsgs[msg.DestDomain] = filtered
-						}
+						requeue = true
+						continue
 					}
-					requeue = true
-					continue
-				}
 
-				// Skip broadcast if exhausted retries
-				if result.ExhaustedRetries {
-					continue
+					// Skip broadcast if exhausted retries
+					if result.ExhaustedRetries {
+						continue
+					}
 				}
 			}
 		}
-	}
 
 		// if the message is attested to, try to broadcast
 		for domain, msgs := range broadcastMsgs {

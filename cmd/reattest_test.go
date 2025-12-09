@@ -253,4 +253,3 @@ func TestApplyReattestResult_PartialUpdate(t *testing.T) {
 	require.Equal(t, uint64(1000), msg.ExpirationBlock) // Unchanged
 	require.Equal(t, 1, msg.ReattestCount)
 }
-

@@ -10,21 +10,18 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/joho/godotenv"
 	"github.com/pascaldekloe/etherstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	testutil "github.com/strangelove-ventures/noble-cctp-relayer/test_util"
+	_ "github.com/strangelove-ventures/noble-cctp-relayer/test_util"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
 // TODO: update so it doesn't rely on block history
 func TestToMessageStateSuccess(t *testing.T) {
-	err := godotenv.Load(testutil.EnvFile)
-	require.NoError(t, err)
-
-	messageTransmitter, err := os.Open("../cmd/ethereum/abi/MessageTransmitter.json")
+	messageTransmitter, err := os.Open("../ethereum/abi/MessageTransmitter.json")
 	require.NoError(t, err)
 
 	messageTransmitterABI, err := abi.JSON(messageTransmitter)

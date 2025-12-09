@@ -118,4 +118,3 @@ func applyReattestResult(msg *types.MessageState, result *ReattestResult) {
 		msg.ExpirationBlock = result.NewExpirationBlock
 	}
 }
-

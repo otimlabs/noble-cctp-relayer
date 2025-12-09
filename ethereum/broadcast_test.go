@@ -10,17 +10,14 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/require"
 
+	_ "github.com/strangelove-ventures/noble-cctp-relayer/test_util"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum/contracts"
-	testutil "github.com/strangelove-ventures/noble-cctp-relayer/test_util"
 )
 
 func TestEthUsedNonce(t *testing.T) {
-	err := godotenv.Load(testutil.EnvFile)
-	require.NoError(t, err)
-
 	sourceDomain := uint32(4)
 	nonce := uint64(612)
 

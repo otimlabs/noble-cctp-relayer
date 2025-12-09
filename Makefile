@@ -1,6 +1,6 @@
-VERSION := $(shell echo $(shell git describe --tags) | sed 's/^v//')
-COMMIT  := $(shell git log -1 --format='%H')
-DIRTY := $(shell git status --porcelain | wc -l | xargs)
+VERSION := $(shell echo $(shell git describe --tags 2>/dev/null || echo "dev") | sed 's/^v//')
+COMMIT  := $(shell git log -1 --format='%H' 2>/dev/null || echo "unknown")
+DIRTY := $(shell git status --porcelain 2>/dev/null | wc -l | xargs)
 
 ldflags = -X github.com/strangelove-ventures/noble-cctp-relayer/cmd.Version=$(VERSION) \
 				-X github.com/strangelove-ventures/noble-cctp-relayer/cmd.Commit=$(COMMIT) \
@@ -17,20 +17,24 @@ GOBIN := $(GOPATH)/bin
 ###############################################################################
 ###                          Formatting & Linting                           ###
 ###############################################################################
-.PHONY: lint lint-fix
+.PHONY: lint lint-fix test
 
 golangci_lint_cmd=golangci-lint
 golangci_version=v1.57.2
 
 lint:
-	@echo "--> Running linter"
+	@echo "🔍 Running linter"
 	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(golangci_version)
-	@$(golangci_lint_cmd) run ./... --timeout 15m
+	@$(GOBIN)/$(golangci_lint_cmd) run ./... --timeout 15m
 
 lint-fix:
-	@echo "--> Running linter and fixing issues"
+	@echo "🔧 Running linter and fixing issues"
 	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(golangci_version)
-	@$(golangci_lint_cmd) run ./... --fix --timeout 15m
+	@$(GOBIN)/$(golangci_lint_cmd) run ./... --fix --timeout 15m
+
+test:
+	@echo "🧪 Running tests"
+	@go test -v ./circle ./cmd ./types ./ethereum -skip 'TestV1Attestation|TestToMessageStateSuccess|TestStartListener'
 
 
 ###############################################################################

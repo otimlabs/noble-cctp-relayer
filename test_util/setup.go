@@ -17,16 +17,15 @@ import (
 )
 
 var logger log.Logger
-var EnvFile = os.ExpandEnv("$GOPATH/src/github.com/strangelove-ventures/noble-cctp-relayer/.env")
 
 func init() {
 	// define logger
 	logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.ErrorLevel))
-
-	err := godotenv.Load(EnvFile)
-	if err != nil {
-		logger.Error("error loading env file", "err", err)
-		os.Exit(1)
+	if err := godotenv.Load(".env"); err != nil {
+		if err = godotenv.Load("../.env"); err != nil {
+			logger.Error("error loading .env file", "err", err)
+			os.Exit(1)
+		}
 	}
 }
 
