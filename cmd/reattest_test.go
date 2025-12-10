@@ -112,27 +112,6 @@ func TestHandleExpiringAttestation_WithinBuffer(t *testing.T) {
 	}
 }
 
-// TestHandleExpiringAttestation_NegativeBuffer verifies negative buffer clamped to zero.
-func TestHandleExpiringAttestation_NegativeBuffer(t *testing.T) {
-	msg := &types.MessageState{
-		Nonce:           123,
-		ExpirationBlock: 1000,
-		ReattestCount:   0,
-	}
-
-	cfg := types.CircleSettings{
-		AttestationBaseURL:     "https://iris-api.circle.com",
-		ExpirationBufferBlocks: -100, // Negative should be clamped to 0
-		ReattestMaxRetries:     3,
-	}
-
-	currentBlock := uint64(800) // Not expiring with 0 buffer
-
-	result, err := handleExpiringAttestation(msg, cfg, currentBlock, testLogger)
-	require.NoError(t, err)
-	require.False(t, result.ShouldReattest)
-}
-
 // TestHandleExpiringAttestation_ExactExpiration verifies behavior at exact expiration.
 func TestHandleExpiringAttestation_ExactExpiration(t *testing.T) {
 	msg := &types.MessageState{
@@ -196,7 +175,7 @@ func TestApplyReattestResult_ExhaustedRetries(t *testing.T) {
 	applyReattestResult(msg, result)
 
 	require.Equal(t, types.Failed, msg.Status)
-	require.Equal(t, 3, msg.ReattestCount)
+	require.Equal(t, uint(3), msg.ReattestCount)
 	require.False(t, msg.LastReattestTime.IsZero())
 }
 
@@ -222,7 +201,7 @@ func TestApplyReattestResult_SuccessfulReattest(t *testing.T) {
 	afterTime := time.Now()
 
 	require.Equal(t, types.Attested, msg.Status)
-	require.Equal(t, 2, msg.ReattestCount)
+	require.Equal(t, uint(2), msg.ReattestCount)
 	require.Equal(t, "new-attestation", msg.Attestation)
 	require.Equal(t, uint64(2000), msg.ExpirationBlock)
 	require.True(t, msg.LastReattestTime.After(beforeTime) || msg.LastReattestTime.Equal(beforeTime))
@@ -251,5 +230,5 @@ func TestApplyReattestResult_PartialUpdate(t *testing.T) {
 
 	require.Equal(t, "new-attestation", msg.Attestation)
 	require.Equal(t, uint64(1000), msg.ExpirationBlock) // Unchanged
-	require.Equal(t, 1, msg.ReattestCount)
+	require.Equal(t, uint(1), msg.ReattestCount)
 }

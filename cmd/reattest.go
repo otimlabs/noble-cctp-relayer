@@ -39,11 +39,8 @@ func handleExpiringAttestation(
 		return result, nil
 	}
 
-	// Calculate buffer blocks (clamp negative to zero)
-	bufferBlocks := uint64(0)
-	if cfg.ExpirationBufferBlocks > 0 {
-		bufferBlocks = uint64(cfg.ExpirationBufferBlocks)
-	}
+	// Calculate buffer blocks
+	bufferBlocks := uint64(cfg.ExpirationBufferBlocks)
 
 	// Check if attestation is expiring soon
 	if currentBlock+bufferBlocks < msg.ExpirationBlock {
@@ -54,7 +51,7 @@ func handleExpiringAttestation(
 
 	// Check if retries exhausted
 	maxRetries := cfg.ReattestMaxRetries
-	if maxRetries <= 0 {
+	if maxRetries == 0 {
 		maxRetries = 3 // Default
 	}
 	if msg.ReattestCount >= maxRetries {

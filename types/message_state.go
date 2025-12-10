@@ -52,7 +52,7 @@ type MessageState struct {
 	CctpVersion       string
 	ExpirationBlock   uint64 // destination chain block when attestation expires
 	FinalityThreshold uint32
-	ReattestCount     int
+	ReattestCount     uint
 	LastReattestTime  time.Time
 }
 

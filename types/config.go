@@ -30,10 +30,10 @@ type CircleSettings struct {
 
 	// V2/Fast Transfer settings
 	EnableFastTransferMonitoring bool   `yaml:"enable-fast-transfer-monitoring"`
-	ReattestMaxRetries           int    `yaml:"reattest-max-retries"`
-	ExpirationBufferBlocks       int    `yaml:"expiration-buffer-blocks"`
+	ReattestMaxRetries           uint   `yaml:"reattest-max-retries"`
+	ExpirationBufferBlocks       uint   `yaml:"expiration-buffer-blocks"`
 	AllowanceMonitorToken        string `yaml:"allowance-monitor-token"`    // token to monitor (default: USDC)
-	AllowanceMonitorInterval     int    `yaml:"allowance-monitor-interval"` // polling interval in seconds (default: 30)
+	AllowanceMonitorInterval     uint   `yaml:"allowance-monitor-interval"` // polling interval in seconds (default: 30)
 }
 
 // GetAPIVersion returns the parsed API version

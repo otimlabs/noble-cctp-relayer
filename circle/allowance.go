@@ -3,6 +3,7 @@ package circle
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strconv"
 	"sync"
 	"time"
@@ -12,6 +13,23 @@ import (
 	"github.com/strangelove-ventures/noble-cctp-relayer/relayer"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
+
+// CheckFastTransferAllowance queries v2 API for remaining Fast Transfer capacity
+func CheckFastTransferAllowance(baseURL string, logger log.Logger, sourceDomain types.Domain, token string) (*types.FastTransferAllowance, error) {
+	baseURL = normalizeBaseURL(baseURL)
+	url := fmt.Sprintf("%s/v2/fastBurn/%s/allowance?sourceDomain=%d", baseURL, token, sourceDomain)
+
+	logger.Debug(fmt.Sprintf("Checking Fast Transfer allowance at %s", url))
+
+	var allowance types.FastTransferAllowance
+	if err := httpRequest(http.MethodGet, url, &allowance); err != nil {
+		return nil, err
+	}
+
+	logger.Info(fmt.Sprintf("Fast Transfer allowance for domain %d: %s/%s %s",
+		sourceDomain, allowance.Allowance, allowance.MaxAllowance, token))
+	return &allowance, nil
+}
 
 // AllowanceState stores Fast Transfer allowance state per domain
 type AllowanceState struct {
@@ -54,7 +72,7 @@ func NewAllowanceMonitor(cfg types.CircleSettings, logger log.Logger, domains []
 		token = "USDC"
 	}
 	interval := cfg.AllowanceMonitorInterval
-	if interval <= 0 {
+	if interval == 0 {
 		interval = 30
 	}
 

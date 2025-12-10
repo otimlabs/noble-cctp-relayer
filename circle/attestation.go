@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -17,7 +16,7 @@ import (
 
 const httpTimeout = 10 * time.Second
 
-// httpRequest performs an HTTP request with timeout and unmarshals JSON response.
+// httpRequest performs an HTTP request with timeout and unmarshals JSON response
 func httpRequest(method, url string, result any) error {
 	ctx, cancel := context.WithTimeout(context.Background(), httpTimeout)
 	defer cancel()
@@ -45,7 +44,7 @@ func httpRequest(method, url string, result any) error {
 	return json.Unmarshal(respBody, result)
 }
 
-// normalizeMessageHash adds 0x prefix if missing.
+// normalizeMessageHash adds 0x prefix if missing
 func normalizeMessageHash(hash string) string {
 	if len(hash) > 2 && hash[:2] != "0x" {
 		return "0x" + hash
@@ -53,13 +52,13 @@ func normalizeMessageHash(hash string) string {
 	return hash
 }
 
-// normalizeBaseURL strips trailing slashes and /attestations suffix for v2 compatibility.
+// normalizeBaseURL strips trailing slashes and /attestations suffix for v2 compatibility
 func normalizeBaseURL(url string) string {
 	url = strings.TrimSuffix(url, "/")
 	return strings.TrimSuffix(url, "/attestations")
 }
 
-// CheckAttestation fetches attestation from Circle API using v1 or v2 endpoint based on config.
+// CheckAttestation fetches attestation from Circle API using v1 or v2 endpoint based on config
 func CheckAttestation(cfg types.CircleSettings, logger log.Logger, irisLookupID, txHash string, sourceDomain, destDomain types.Domain) *types.AttestationResponse {
 	version, err := cfg.GetAPIVersion()
 	if err != nil {
@@ -97,7 +96,7 @@ func checkAttestationV1(baseURL string, logger log.Logger, irisLookupID string) 
 }
 
 // checkAttestationV2 queries v2 API: GET {baseURL}/v2/messages/{sourceDomain}?transactionHash={txHash}
-// Returns first message for backward compatibility. Use CheckAttestationV2All for multiple messages.
+// Returns first message for backward compatibility. Use CheckAttestationV2All for multiple messages
 func checkAttestationV2(baseURL string, logger log.Logger, txHash string, sourceDomain types.Domain) *types.AttestationResponse {
 	baseURL = normalizeBaseURL(baseURL)
 	txHash = normalizeMessageHash(txHash)
@@ -128,7 +127,7 @@ func checkAttestationV2(baseURL string, logger log.Logger, txHash string, source
 	}
 }
 
-// CheckAttestationV2All fetches all messages for a transaction from v2 API.
+// CheckAttestationV2All fetches all messages for a transaction from v2 API
 func CheckAttestationV2All(baseURL string, logger log.Logger, txHash string, sourceDomain types.Domain) ([]types.MessageResponseV2, error) {
 	baseURL = normalizeBaseURL(baseURL)
 	txHash = normalizeMessageHash(txHash)
@@ -167,52 +166,4 @@ func GetAttestationV2Message(baseURL string, logger log.Logger, txHash string, s
 	}
 
 	return &v2Response.Messages[0], nil
-}
-
-// CheckFastTransferAllowance queries v2 API for remaining Fast Transfer capacity.
-func CheckFastTransferAllowance(baseURL string, logger log.Logger, sourceDomain types.Domain, token string) (*types.FastTransferAllowance, error) {
-	baseURL = normalizeBaseURL(baseURL)
-	url := fmt.Sprintf("%s/v2/fastBurn/%s/allowance?sourceDomain=%d", baseURL, token, sourceDomain)
-
-	logger.Debug(fmt.Sprintf("Checking Fast Transfer allowance at %s", url))
-
-	var allowance types.FastTransferAllowance
-	if err := httpRequest(http.MethodGet, url, &allowance); err != nil {
-		return nil, err
-	}
-
-	logger.Info(fmt.Sprintf("Fast Transfer allowance for domain %d: %s/%s %s",
-		sourceDomain, allowance.Allowance, allowance.MaxAllowance, token))
-	return &allowance, nil
-}
-
-// RequestReattestation requests a new attestation with higher finality threshold
-func RequestReattestation(baseURL string, logger log.Logger, sourceDomain types.Domain, nonce uint64) (*types.AttestationResponse, error) {
-	baseURL = normalizeBaseURL(baseURL)
-	url := fmt.Sprintf("%s/v2/reattest/%d/%d", baseURL, sourceDomain, nonce)
-
-	logger.Info(fmt.Sprintf("Requesting re-attestation for domain %d nonce %d", sourceDomain, nonce))
-
-	var reattestResp types.ReattestResponse
-	if err := httpRequest(http.MethodPost, url, &reattestResp); err != nil {
-		return nil, err
-	}
-
-	logger.Info(fmt.Sprintf("Re-attestation successful for nonce %d", nonce))
-	return &types.AttestationResponse{
-		Attestation: reattestResp.Attestation,
-		Status:      reattestResp.Status,
-	}, nil
-}
-
-// ParseExpirationBlock converts expiration block string to uint64, returns 0 on error.
-func ParseExpirationBlock(expirationBlock string) uint64 {
-	if expirationBlock == "" {
-		return 0
-	}
-	block, err := strconv.ParseUint(expirationBlock, 10, 64)
-	if err != nil {
-		return 0
-	}
-	return block
 }
