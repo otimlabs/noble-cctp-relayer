@@ -14,11 +14,11 @@ import (
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
-const httpTimeout = 10 * time.Second
+const defaultHTTPTimeout = 10 * time.Second
 
-// httpRequest performs an HTTP request with timeout and unmarshals JSON response
+// httpRequest performs an HTTP request and unmarshals JSON response
 func httpRequest(method, url string, result any) error {
-	ctx, cancel := context.WithTimeout(context.Background(), httpTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultHTTPTimeout)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, method, url, nil)

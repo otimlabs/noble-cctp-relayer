@@ -109,6 +109,7 @@ func (m *AllowanceMonitor) Start(ctx context.Context) {
 	}
 }
 
+// queryAllowances fetches and updates Fast Transfer allowance for all monitored domains
 func (m *AllowanceMonitor) queryAllowances() {
 	for _, domain := range m.domains {
 		allowance, err := CheckFastTransferAllowance(m.baseURL, m.logger, domain, m.token)

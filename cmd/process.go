@@ -227,7 +227,7 @@ func StartProcessor(
 					msg.Updated = time.Now()
 					State.Mu.Unlock()
 
-					// For v2, fetch message details for Fast Transfer expiration tracking
+					// Fetch message details for Fast Transfer expiration tracking
 					if apiVersion == types.APIVersionV2 {
 						msgResp, err := circle.GetAttestationV2Message(
 							cfg.Circle.AttestationBaseURL, logger, msg.SourceTxHash, msg.SourceDomain)
@@ -249,40 +249,20 @@ func StartProcessor(
 
 			// Handle expired Fast Transfer attestations (v2 only)
 			if apiVersion == types.APIVersionV2 && msg.Status == types.Attested && msg.ExpirationBlock > 0 {
-				destChain, ok := registeredDomains[msg.DestDomain]
-				if ok {
-					currentBlock := destChain.LatestBlock()
-
-					result, err := handleExpiringAttestation(msg, cfg.Circle, currentBlock, logger)
+				if destChain, ok := registeredDomains[msg.DestDomain]; ok {
+					result, err := circle.HandleExpiringAttestation(msg, cfg.Circle, destChain.LatestBlock(), logger)
 					if err != nil {
 						logger.Error("Re-attestation handling failed", "nonce", msg.Nonce, "error", err)
 					}
 
-					// Apply result to message state
-					State.Mu.Lock()
-					applyReattestResult(msg, result)
-					State.Mu.Unlock()
+					circle.ApplyReattestResult(State, msg, result)
 
-					// Remove from broadcast queue if needed
 					if result.RemoveFromQueue {
-						if domainMsgs, exists := broadcastMsgs[msg.DestDomain]; exists {
-							filtered := domainMsgs[:0]
-							for _, m := range domainMsgs {
-								if m != msg {
-									filtered = append(filtered, m)
-								}
-							}
-							if len(filtered) == 0 {
-								delete(broadcastMsgs, msg.DestDomain)
-							} else {
-								broadcastMsgs[msg.DestDomain] = filtered
-							}
-						}
+						circle.RemoveMessageFromQueue(broadcastMsgs, msg)
 						requeue = true
 						continue
 					}
 
-					// Skip broadcast if exhausted retries
 					if result.ExhaustedRetries {
 						continue
 					}
