@@ -5,10 +5,7 @@ import (
 	"testing"
 
 	"github.com/joho/godotenv"
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
-
-	"cosmossdk.io/log"
 
 	"github.com/strangelove-ventures/noble-cctp-relayer/cmd"
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
@@ -16,16 +13,18 @@ import (
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
-var logger log.Logger
+// GetEnvOrDefault returns the environment variable value or a default if not set
+func GetEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
 
 func init() {
-	// define logger
-	logger = log.NewLogger(os.Stdout, log.LevelOption(zerolog.ErrorLevel))
+	// Try to load .env file if it exists
 	if err := godotenv.Load(".env"); err != nil {
-		if err = godotenv.Load("../.env"); err != nil {
-			logger.Error("error loading .env file", "err", err)
-			os.Exit(1)
-		}
+		_ = godotenv.Load("../.env")
 	}
 }
 
@@ -35,15 +34,16 @@ func ConfigSetup(t *testing.T) (a *cmd.AppState, registeredDomains map[types.Dom
 	var testConfig = types.Config{
 		Chains: map[string]types.ChainConfig{
 			"noble": &noble.ChainConfig{
-				ChainID: "grand-1",
-				RPC:     os.Getenv("NOBLE_RPC"),
+				ChainID:          "grand-1",
+				RPC:              GetEnvOrDefault("NOBLE_RPC", "https://noble-rpc.polkachu.com"),
+				MinterPrivateKey: "1111111111111111111111111111111111111111111111111111111111111111",
 			},
 			"ethereum": &ethereum.ChainConfig{
 				ChainID:          11155111,
 				Domain:           types.Domain(0),
 				MinterPrivateKey: "1111111111111111111111111111111111111111111111111111111111111111",
-				RPC:              os.Getenv("SEPOLIA_RPC"),
-				WS:               os.Getenv("SEPOLIA_WS"),
+				RPC:              GetEnvOrDefault("SEPOLIA_RPC", "https://ethereum-sepolia-rpc.publicnode.com"),
+				WS:               GetEnvOrDefault("SEPOLIA_WS", "wss://ethereum-sepolia-rpc.publicnode.com"),
 			},
 		},
 		Circle: types.CircleSettings{

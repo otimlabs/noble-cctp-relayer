@@ -15,14 +15,14 @@ import (
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
-const httpTimeout = 5 * time.Second
+const httpTimeout = 10 * time.Second
 
-// httpGet performs a GET request with timeout and unmarshals JSON response.
-func httpGet(url string, result any) error {
+// httpRequest performs an HTTP request with timeout and unmarshals JSON response.
+func httpRequest(method, url string, result any) error {
 	ctx, cancel := context.WithTimeout(context.Background(), httpTimeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, method, url, nil)
 	if err != nil {
 		return err
 	}
@@ -33,45 +33,16 @@ func httpGet(url string, result any) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
-
-	return json.Unmarshal(body, result)
-}
-
-// httpPost performs a POST request with timeout and unmarshals JSON response.
-func httpPost(url string, result any) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
-	if err != nil {
-		return err
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("status %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("status %d: %s", resp.StatusCode, string(respBody))
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(body, result)
+	return json.Unmarshal(respBody, result)
 }
 
 // normalizeMessageHash adds 0x prefix if missing.
@@ -102,22 +73,21 @@ func CheckAttestation(cfg types.CircleSettings, logger log.Logger, irisLookupID,
 	case types.APIVersionV2:
 		return checkAttestationV2(cfg.AttestationBaseURL, logger, txHash, sourceDomain)
 	default:
-		return checkAttestationV1(cfg.AttestationBaseURL, logger, irisLookupID)
+		logger.Error("unsupported API version", "version", version)
+		return nil
 	}
 }
 
-// checkAttestationV1 queries v1 API: GET {baseURL}/{messageHash}
-func checkAttestationV1(attestationURL string, logger log.Logger, irisLookupID string) *types.AttestationResponse {
-	if attestationURL[len(attestationURL)-1:] != "/" {
-		attestationURL += "/"
-	}
+// checkAttestationV1 queries v1 API: GET {baseURL}/attestations/{messageHash}
+func checkAttestationV1(baseURL string, logger log.Logger, irisLookupID string) *types.AttestationResponse {
+	baseURL = normalizeBaseURL(baseURL)
 	irisLookupID = normalizeMessageHash(irisLookupID)
 
-	url := attestationURL + irisLookupID
+	url := fmt.Sprintf("%s/attestations/%s", baseURL, irisLookupID)
 	logger.Debug(fmt.Sprintf("Checking v1 attestation at %s", url))
 
 	var response types.AttestationResponse
-	if err := httpGet(url, &response); err != nil {
+	if err := httpRequest(http.MethodGet, url, &response); err != nil {
 		logger.Debug("v1 attestation request failed", "error", err)
 		return nil
 	}
@@ -136,7 +106,7 @@ func checkAttestationV2(baseURL string, logger log.Logger, txHash string, source
 	logger.Debug(fmt.Sprintf("Checking v2 attestation at %s", url))
 
 	var v2Response types.AttestationResponseV2
-	if err := httpGet(url, &v2Response); err != nil {
+	if err := httpRequest(http.MethodGet, url, &v2Response); err != nil {
 		logger.Debug("v2 attestation request failed", "error", err)
 		return nil
 	}
@@ -167,7 +137,7 @@ func CheckAttestationV2All(baseURL string, logger log.Logger, txHash string, sou
 	logger.Debug(fmt.Sprintf("Fetching all v2 messages at %s", url))
 
 	var v2Response types.AttestationResponseV2
-	if err := httpGet(url, &v2Response); err != nil {
+	if err := httpRequest(http.MethodGet, url, &v2Response); err != nil {
 		return nil, err
 	}
 
@@ -188,7 +158,7 @@ func GetAttestationV2Message(baseURL string, logger log.Logger, txHash string, s
 	logger.Debug(fmt.Sprintf("Fetching v2 message details at %s", url))
 
 	var v2Response types.AttestationResponseV2
-	if err := httpGet(url, &v2Response); err != nil {
+	if err := httpRequest(http.MethodGet, url, &v2Response); err != nil {
 		return nil, err
 	}
 
@@ -207,7 +177,7 @@ func CheckFastTransferAllowance(baseURL string, logger log.Logger, sourceDomain 
 	logger.Debug(fmt.Sprintf("Checking Fast Transfer allowance at %s", url))
 
 	var allowance types.FastTransferAllowance
-	if err := httpGet(url, &allowance); err != nil {
+	if err := httpRequest(http.MethodGet, url, &allowance); err != nil {
 		return nil, err
 	}
 
@@ -224,7 +194,7 @@ func RequestReattestation(baseURL string, logger log.Logger, sourceDomain types.
 	logger.Info(fmt.Sprintf("Requesting re-attestation for domain %d nonce %d", sourceDomain, nonce))
 
 	var reattestResp types.ReattestResponse
-	if err := httpPost(url, &reattestResp); err != nil {
+	if err := httpRequest(http.MethodPost, url, &reattestResp); err != nil {
 		return nil, err
 	}
 

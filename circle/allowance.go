@@ -13,15 +13,6 @@ import (
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
-// parseAllowance converts allowance string from smallest unit to token value (6 decimals)
-func parseAllowance(s string) (float64, error) {
-	val, err := strconv.ParseUint(s, 10, 64)
-	if err != nil {
-		return 0, err
-	}
-	return float64(val) / 1e6, nil
-}
-
 // AllowanceState stores Fast Transfer allowance state per domain
 type AllowanceState struct {
 	mu         sync.RWMutex
@@ -111,8 +102,8 @@ func (m *AllowanceMonitor) queryAllowances() {
 
 		// Export to Prometheus
 		if m.metrics != nil && allowance.Allowance != "" {
-			if val, err := parseAllowance(allowance.Allowance); err == nil {
-				m.metrics.SetFastTransferAllowance(fmt.Sprintf("%d", domain), m.token, val)
+			if val, err := strconv.ParseUint(allowance.Allowance, 10, 64); err == nil {
+				m.metrics.SetFastTransferAllowance(fmt.Sprintf("%d", domain), m.token, float64(val)/1e6)
 			}
 		}
 	}

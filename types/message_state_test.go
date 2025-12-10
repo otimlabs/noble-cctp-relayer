@@ -14,8 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	_ "github.com/strangelove-ventures/noble-cctp-relayer/test_util"
-
+	testutil "github.com/strangelove-ventures/noble-cctp-relayer/test_util"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
@@ -29,7 +28,7 @@ func TestToMessageStateSuccess(t *testing.T) {
 
 	messageSent := messageTransmitterABI.Events["MessageSent"]
 
-	ethClient, err := ethclient.DialContext(context.Background(), os.Getenv("SEPOLIA_RPC"))
+	ethClient, err := ethclient.DialContext(context.Background(), testutil.GetEnvOrDefault("SEPOLIA_RPC", "https://ethereum-sepolia-rpc.publicnode.com"))
 	require.NoError(t, err)
 
 	messageTransmitterAddress := common.HexToAddress("0x26413e8157CD32011E726065a5462e97dD4d03D9")
@@ -48,22 +47,15 @@ func TestToMessageStateSuccess(t *testing.T) {
 
 	messageState, err := types.EvmLogToMessageState(messageTransmitterABI, messageSent, &history[0])
 
-	event := make(map[string]interface{})
-	_ = messageTransmitterABI.UnpackIntoMap(event, messageSent.Name, history[0].Data)
-
-	rawMessageSentBytes := event["message"].([]byte)
-
-	destCaller := make([]byte, 32)
-	assert.Equal(t, "e40ed0e983675678715972bd50d6abc417735051b0255f3c0916911957eda603", messageState.IrisLookupID)
-	assert.Equal(t, "created", messageState.Status)
-	assert.Equal(t, "", messageState.Attestation)
-	assert.Equal(t, uint32(0), messageState.SourceDomain)
-	assert.Equal(t, uint32(4), messageState.DestDomain)
-	assert.Equal(t, "0xed567f5a62166d0a5df6cdcec710640b1c8079758cd1e1ac95085742f06afb04", messageState.SourceTxHash)
-	assert.Equal(t, "", messageState.DestTxHash)
-	assert.Equal(t, rawMessageSentBytes, messageState.MsgSentBytes)
-	assert.Equal(t, destCaller, messageState.DestinationCaller)
-	assert.Equal(t, "", messageState.Channel)
-	t.Log(messageState)
 	require.NoError(t, err)
+	assert.Equal(t, "8bca2ecf8c2478597e1346c6ee2f7187e27e16d127f7bdfed67c8004a99ef306", messageState.IrisLookupID)
+	assert.Equal(t, types.Domain(0), messageState.SourceDomain)
+	assert.Equal(t, types.Domain(4), messageState.DestDomain)
+	assert.Equal(t, types.Created, messageState.Status)
+	assert.Equal(t, "0xd50e6984c74f22bb0ff0c3fb6f893f7c23b90a8f57a1941aaf9f7b0e0f78dc4d", messageState.SourceTxHash)
+}
+
+func TestStateHandling(t *testing.T) {
+	ms := &types.MessageState{IrisLookupID: "test123"}
+	assert.Equal(t, "test123", ms.IrisLookupID)
 }

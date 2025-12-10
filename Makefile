@@ -1,6 +1,6 @@
 VERSION := $(shell echo $(shell git describe --tags 2>/dev/null || echo "dev") | sed 's/^v//')
-COMMIT  := $(shell git log -1 --format='%H' 2>/dev/null || echo "unknown")
-DIRTY := $(shell git status --porcelain 2>/dev/null | wc -l | xargs)
+COMMIT  := $(shell git log -1 --format='%H')
+DIRTY := $(shell git status --porcelain | wc -l | xargs)
 
 ldflags = -X github.com/strangelove-ventures/noble-cctp-relayer/cmd.Version=$(VERSION) \
 				-X github.com/strangelove-ventures/noble-cctp-relayer/cmd.Commit=$(COMMIT) \
