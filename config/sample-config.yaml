@@ -140,4 +140,7 @@ circle:
   allowance-monitor-token: "USDC"        # v2: token to monitor
   allowance-monitor-interval: 30         # v2: polling interval in seconds
 
+# Only process transfers explicitly sent to this relayer's minter address
+destination-caller-only: false
+
 processor-worker-count: 16

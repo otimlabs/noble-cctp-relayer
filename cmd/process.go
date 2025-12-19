@@ -189,7 +189,7 @@ func StartProcessor(
 		for _, msg := range tx.Msgs {
 			// if a filter's condition is met, mark as filtered
 			if FilterDisabledCCTPRoutes(cfg, logger, msg) ||
-				filterInvalidDestinationCallers(registeredDomains, logger, msg) ||
+				filterInvalidDestinationCallers(registeredDomains, logger, msg, cfg.DestinationCallerOnly) ||
 				filterLowTransfers(cfg, logger, msg) {
 				State.Mu.Lock()
 				msg.Status = types.Filtered
@@ -323,23 +323,30 @@ func FilterDisabledCCTPRoutes(cfg *types.Config, logger log.Logger, msg *types.M
 	return true
 }
 
-// filterInvalidDestinationCallers returns true if the minter is not the destination caller for the specified domain
-func filterInvalidDestinationCallers(registeredDomains map[types.Domain]types.Chain, logger log.Logger, msg *types.MessageState) bool {
+// filterInvalidDestinationCallers filters messages based on destination caller matching
+func filterInvalidDestinationCallers(registeredDomains map[types.Domain]types.Chain, logger log.Logger, msg *types.MessageState, destinationCallerOnly bool) bool {
 	chain, ok := registeredDomains[msg.DestDomain]
 	if !ok {
 		logger.Error("No chain registered for domain", "domain", msg.DestDomain)
 		return true
 	}
+
 	validCaller, address := chain.IsDestinationCaller(msg.DestinationCaller)
 
+	// Always accept transfers explicitly sent to our minter address
 	if validCaller {
-		// we do not want to filter this message if valid caller
 		return false
 	}
 
-	logger.Info(fmt.Sprintf("Filtered tx %s from %d to %d due to destination caller: %s)",
-		msg.SourceTxHash, msg.SourceDomain, msg.DestDomain, address))
-	return true
+	// destination-caller-only: reject all non-matching callers
+	// permissionless (default): accept 0x000...000, reject explicit mismatches
+	shouldFilter := destinationCallerOnly || address != ""
+	if shouldFilter {
+		logger.Info(fmt.Sprintf("Filtered tx %s from %d to %d: destination caller mismatch: %s",
+			msg.SourceTxHash, msg.SourceDomain, msg.DestDomain, address))
+	}
+
+	return shouldFilter
 }
 
 // filterLowTransfers returns true if the amount being transferred to the destination chain is lower than the min-mint-amount configured
