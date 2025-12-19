@@ -19,6 +19,7 @@ import (
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/noble"
 	"github.com/strangelove-ventures/noble-cctp-relayer/relayer"
+	"github.com/strangelove-ventures/noble-cctp-relayer/solana"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
@@ -341,6 +342,7 @@ func filterInvalidDestinationCallers(registeredDomains map[types.Domain]types.Ch
 	// destination-caller-only: reject all non-matching callers
 	// permissionless (default): accept 0x000...000, reject explicit mismatches
 	shouldFilter := destinationCallerOnly || address != ""
+
 	if shouldFilter {
 		logger.Info(fmt.Sprintf("Filtered tx %s from %d to %d: destination caller mismatch: %s",
 			msg.SourceTxHash, msg.SourceDomain, msg.DestDomain, address))
@@ -368,13 +370,15 @@ func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.Message
 		minBurnAmount = nobleCfg.MinMintAmount
 	} else {
 		for _, chain := range cfg.Chains {
-			c, ok := chain.(*ethereum.ChainConfig)
-			if !ok {
-				// noble chain, handled above
-				continue
-			}
-			if c.Domain == msg.DestDomain {
-				minBurnAmount = c.MinMintAmount
+			switch c := chain.(type) {
+			case *ethereum.ChainConfig:
+				if c.Domain == msg.DestDomain {
+					minBurnAmount = c.MinMintAmount
+				}
+			case *solana.ChainConfig:
+				if c.Domain == msg.DestDomain {
+					minBurnAmount = c.MinMintAmount
+				}
 			}
 		}
 	}

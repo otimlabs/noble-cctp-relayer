@@ -231,8 +231,8 @@ func (s *Solana) WalletBalanceMetric(
 				continue
 			}
 
-			balanceInSOL := float64(balance.Value) / 1e9
-			metrics.SetWalletBalance(s.name, s.minterAddress.String(), s.MetricsDenom, balanceInSOL)
+			balanceInDenom := float64(balance.Value) / float64(s.MetricsExponent)
+			metrics.SetWalletBalance(s.name, s.minterAddress.String(), s.MetricsDenom, balanceInDenom)
 		}
 	}
 }
