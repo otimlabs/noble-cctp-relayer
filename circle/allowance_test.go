@@ -101,10 +101,3 @@ func TestAllowanceState_ConcurrentAccess(t *testing.T) {
 	require.Equal(t, json.Number("1000000"), state.Get(types.Domain(0)).Allowance)
 	require.Equal(t, json.Number("2000000"), state.Get(types.Domain(1)).Allowance)
 }
-
-
-
-
-
-
-

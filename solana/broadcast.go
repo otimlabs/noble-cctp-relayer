@@ -151,7 +151,9 @@ func (s *Solana) buildReceiveMessageInstruction(
 		return nil, fmt.Errorf("failed to parse recipient: %w", err)
 	}
 
-	instructionData := append(messageBytes, attestationBytes...)
+	instructionData := make([]byte, 0, len(messageBytes)+len(attestationBytes))
+	instructionData = append(instructionData, messageBytes...)
+	instructionData = append(instructionData, attestationBytes...)
 
 	// Account order must match TokenMessengerMinter receiveMessage requirements
 	accountMetas := solana.AccountMetaSlice{

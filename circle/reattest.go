@@ -154,10 +154,3 @@ func RemoveMessageFromQueue(queue map[types.Domain][]*types.MessageState, msg *t
 		queue[msg.DestDomain] = filtered
 	}
 }
-
-
-
-
-
-
-

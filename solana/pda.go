@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/gagliardetto/solana-go"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
