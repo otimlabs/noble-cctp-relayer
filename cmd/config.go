@@ -66,11 +66,12 @@ func ParseConfig(file string) (*types.Config, error) {
 	}
 
 	c := types.Config{
-		EnabledRoutes:        cfg.EnabledRoutes,
-		Circle:               cfg.Circle,
-		ProcessorWorkerCount: cfg.ProcessorWorkerCount,
-		API:                  cfg.API,
-		Chains:               make(map[string]types.ChainConfig),
+		EnabledRoutes:          cfg.EnabledRoutes,
+		Circle:                 cfg.Circle,
+		ProcessorWorkerCount:   cfg.ProcessorWorkerCount,
+		MintRecipientWhitelist:  cfg.MintRecipientWhitelist,
+		API:                    cfg.API,
+		Chains:                 make(map[string]types.ChainConfig),
 	}
 
 	for name, chain := range cfg.Chains {

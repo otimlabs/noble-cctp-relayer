@@ -5,8 +5,10 @@ type Config struct {
 	EnabledRoutes map[Domain][]Domain    `yaml:"enabled-routes"`
 	Circle        CircleSettings         `yaml:"circle"`
 
-	ProcessorWorkerCount uint32 `yaml:"processor-worker-count"`
-	API                  struct {
+	ProcessorWorkerCount   uint32   `yaml:"processor-worker-count"`
+	MintRecipientWhitelist []string `yaml:"mint-recipient-whitelist"` // list of destination mint recipient addresses to allow (empty means no filtering)
+
+	API struct {
 		TrustedProxies []string `yaml:"trusted-proxies"`
 	} `yaml:"api"`
 }
@@ -16,8 +18,10 @@ type ConfigWrapper struct {
 	EnabledRoutes map[Domain][]Domain       `yaml:"enabled-routes"`
 	Circle        CircleSettings            `yaml:"circle"`
 
-	ProcessorWorkerCount uint32 `yaml:"processor-worker-count"`
-	API                  struct {
+	ProcessorWorkerCount   uint32   `yaml:"processor-worker-count"`
+	MintRecipientWhitelist []string `yaml:"mint-recipient-whitelist"` // list of destination mint recipient addresses to allow (empty means no filtering)
+
+	API struct {
 		TrustedProxies []string `yaml:"trusted-proxies"`
 	} `yaml:"api"`
 }
