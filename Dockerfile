@@ -6,9 +6,13 @@ ARG TARGETARCH
 ARG BUILDARCH
 
 RUN if [ "${TARGETARCH}" = "arm64" ] && [ "${BUILDARCH}" != "arm64" ]; then \
-        wget -c https://musl.cc/aarch64-linux-musl-cross.tgz -O - | tar -xzvv --strip-components 1 -C /usr; \
+        wget --tries=5 --timeout=30 --retry-connrefused -c https://musl.cc/aarch64-linux-musl-cross.tgz -O /tmp/musl-cross.tgz && \
+        tar -xzvv --strip-components 1 -C /usr -f /tmp/musl-cross.tgz && \
+        rm -f /tmp/musl-cross.tgz; \
     elif [ "${TARGETARCH}" = "amd64" ] && [ "${BUILDARCH}" != "amd64" ]; then \
-        wget -c https://musl.cc/x86_64-linux-musl-cross.tgz -O - | tar -xzvv --strip-components 1 -C /usr; \
+        wget --tries=5 --timeout=30 --retry-connrefused -c https://musl.cc/x86_64-linux-musl-cross.tgz -O /tmp/musl-cross.tgz && \
+        tar -xzvv --strip-components 1 -C /usr -f /tmp/musl-cross.tgz && \
+        rm -f /tmp/musl-cross.tgz; \
     fi
 
 ADD . .
