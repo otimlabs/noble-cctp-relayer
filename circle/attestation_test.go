@@ -67,11 +67,9 @@ func TestAPIVersionParsing(t *testing.T) {
 	}{
 		{"v1", types.APIVersionV1},
 		{"V1", types.APIVersionV1},
-		{"1", types.APIVersionV1},
 		{"", types.APIVersionV1},
 		{"v2", types.APIVersionV2},
 		{"V2", types.APIVersionV2},
-		{"2", types.APIVersionV2},
 	} {
 		v, err := types.ParseAPIVersion(tc.input)
 		require.NoError(t, err, "input: %s", tc.input)
@@ -79,12 +77,12 @@ func TestAPIVersionParsing(t *testing.T) {
 	}
 
 	// Invalid versions
-	for _, input := range []string{"invalid", "v3"} {
+	for _, input := range []string{"invalid", "v3", "1", "2"} {
 		_, err := types.ParseAPIVersion(input)
 		require.Error(t, err)
 	}
 
-	// String conversion
-	require.Equal(t, "v1", types.APIVersionV1.String())
-	require.Equal(t, "v2", types.APIVersionV2.String())
+	// String conversion - APIVersion is now a string type
+	require.Equal(t, "v1", string(types.APIVersionV1))
+	require.Equal(t, "v2", string(types.APIVersionV2))
 }

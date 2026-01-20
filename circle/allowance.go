@@ -132,8 +132,13 @@ func (m *AllowanceMonitor) queryAllowances() {
 // Returns nil if disabled, otherwise returns monitor instance running in background goroutine.
 func StartAllowanceMonitor(ctx context.Context, cfg types.CircleSettings, logger log.Logger, domains []types.Domain, metrics *relayer.PromMetrics) *AllowanceMonitor {
 	apiVersion, err := cfg.GetAPIVersion()
-	if err != nil || apiVersion != types.APIVersionV2 {
-		logger.Info("Fast Transfer allowance monitoring disabled (not v2)")
+	if err != nil {
+		logger.Error("Failed to parse API version for allowance monitoring", "error", err)
+		return nil
+	}
+
+	if apiVersion != types.APIVersionV2 {
+		logger.Info("Fast Transfer allowance monitoring disabled (requires v2 API)")
 		return nil
 	}
 

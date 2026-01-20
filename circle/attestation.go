@@ -58,6 +58,11 @@ func normalizeBaseURL(url string) string {
 	return strings.TrimSuffix(url, "/attestations")
 }
 
+// buildV2MessagesURL constructs the v2 API URL for querying messages by transaction hash
+func buildV2MessagesURL(baseURL string, sourceDomain types.Domain, txHash string) string {
+	return fmt.Sprintf("%s/v2/messages/%d?transactionHash=%s", baseURL, sourceDomain, txHash)
+}
+
 // CheckAttestation fetches attestation from Circle API using v1 or v2 endpoint based on config
 func CheckAttestation(cfg types.CircleSettings, logger log.Logger, irisLookupID, txHash string, sourceDomain, destDomain types.Domain) *types.AttestationResponse {
 	version, err := cfg.GetAPIVersion()
@@ -87,7 +92,12 @@ func checkAttestationV1(baseURL string, logger log.Logger, irisLookupID string) 
 
 	var response types.AttestationResponse
 	if err := httpRequest(http.MethodGet, url, &response); err != nil {
-		logger.Debug("v1 attestation request failed", "error", err)
+		// Distinguish between "not found" (expected during polling) and actual errors
+		if strings.Contains(err.Error(), "status 404") {
+			logger.Debug("v1 attestation not found (may not be ready yet)", "messageHash", irisLookupID)
+		} else {
+			logger.Error("v1 attestation request failed", "error", err, "url", url)
+		}
 		return nil
 	}
 
@@ -101,12 +111,17 @@ func checkAttestationV2(baseURL string, logger log.Logger, txHash string, source
 	baseURL = normalizeBaseURL(baseURL)
 	txHash = normalizeMessageHash(txHash)
 
-	url := fmt.Sprintf("%s/v2/messages/%d?transactionHash=%s", baseURL, sourceDomain, txHash)
+	url := buildV2MessagesURL(baseURL, sourceDomain, txHash)
 	logger.Debug(fmt.Sprintf("Checking v2 attestation at %s", url))
 
 	var v2Response types.AttestationResponseV2
 	if err := httpRequest(http.MethodGet, url, &v2Response); err != nil {
-		logger.Debug("v2 attestation request failed", "error", err)
+		// Distinguish between "not found" (expected during polling) and actual errors
+		if strings.Contains(err.Error(), "status 404") {
+			logger.Debug("v2 attestation not found (may not be ready yet)", "txHash", txHash)
+		} else {
+			logger.Error("v2 attestation request failed", "error", err, "url", url)
+		}
 		return nil
 	}
 
@@ -132,7 +147,7 @@ func CheckAttestationV2All(baseURL string, logger log.Logger, txHash string, sou
 	baseURL = normalizeBaseURL(baseURL)
 	txHash = normalizeMessageHash(txHash)
 
-	url := fmt.Sprintf("%s/v2/messages/%d?transactionHash=%s", baseURL, sourceDomain, txHash)
+	url := buildV2MessagesURL(baseURL, sourceDomain, txHash)
 	logger.Debug(fmt.Sprintf("Fetching all v2 messages at %s", url))
 
 	var v2Response types.AttestationResponseV2
@@ -153,7 +168,7 @@ func GetAttestationV2Message(baseURL string, logger log.Logger, txHash string, s
 	baseURL = normalizeBaseURL(baseURL)
 	txHash = normalizeMessageHash(txHash)
 
-	url := fmt.Sprintf("%s/v2/messages/%d?transactionHash=%s", baseURL, sourceDomain, txHash)
+	url := buildV2MessagesURL(baseURL, sourceDomain, txHash)
 	logger.Debug(fmt.Sprintf("Fetching v2 message details at %s", url))
 
 	var v2Response types.AttestationResponseV2
