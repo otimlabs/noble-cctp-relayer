@@ -1,5 +1,7 @@
 package types
 
+import "encoding/json"
+
 // AttestationResponse is the response received from Circle's iris api
 // Example: https://iris-api-sandbox.circle.com/attestations/0x85bbf7e65a5992e6317a61f005e06d9972a033d71b514be183b179e1b47723fe
 type AttestationResponse struct {
@@ -28,10 +30,10 @@ type MessageResponseV2 struct {
 // FastTransferAllowance is the response received from Circle's iris api v2 fast transfer allowance endpoint
 // Example: https://iris-api-sandbox.circle.com/v2/fastBurn/0xusdc/allowance?sourceDomain=0
 type FastTransferAllowance struct {
-	SourceDomain string `json:"sourceDomain"`
-	Token        string `json:"token"`
-	Allowance    string `json:"allowance"`
-	MaxAllowance string `json:"maxAllowance"`
+	SourceDomain json.Number `json:"sourceDomain"`
+	Token        string      `json:"token"`
+	Allowance    json.Number `json:"allowance"`
+	MaxAllowance json.Number `json:"maxAllowance"`
 }
 
 // ReattestResponse is the response received from Circle's iris api v2 re-attestation endpoint

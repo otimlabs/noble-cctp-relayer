@@ -1,6 +1,7 @@
 package circle
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -25,10 +26,10 @@ func TestAllowanceState_SetGet(t *testing.T) {
 	state := NewAllowanceState()
 
 	allowance := &types.FastTransferAllowance{
-		SourceDomain: "0",
+		SourceDomain: json.Number("0"),
 		Token:        "USDC",
-		Allowance:    "1000000",
-		MaxAllowance: "5000000",
+		Allowance:    json.Number("1000000"),
+		MaxAllowance: json.Number("5000000"),
 	}
 
 	// Set and get
@@ -78,8 +79,8 @@ func TestNewAllowanceMonitor_CustomSettings(t *testing.T) {
 func TestAllowanceState_ConcurrentAccess(t *testing.T) {
 	state := NewAllowanceState()
 
-	allowance1 := &types.FastTransferAllowance{SourceDomain: "0", Allowance: "1000000"}
-	allowance2 := &types.FastTransferAllowance{SourceDomain: "1", Allowance: "2000000"}
+	allowance1 := &types.FastTransferAllowance{SourceDomain: json.Number("0"), Allowance: json.Number("1000000")}
+	allowance2 := &types.FastTransferAllowance{SourceDomain: json.Number("1"), Allowance: json.Number("2000000")}
 
 	// Concurrent writes
 	go func() {
@@ -97,6 +98,6 @@ func TestAllowanceState_ConcurrentAccess(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Verify final state
-	require.Equal(t, "1000000", state.Get(types.Domain(0)).Allowance)
-	require.Equal(t, "2000000", state.Get(types.Domain(1)).Allowance)
+	require.Equal(t, json.Number("1000000"), state.Get(types.Domain(0)).Allowance)
+	require.Equal(t, json.Number("2000000"), state.Get(types.Domain(1)).Allowance)
 }

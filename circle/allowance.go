@@ -27,7 +27,7 @@ func CheckFastTransferAllowance(baseURL string, logger log.Logger, sourceDomain 
 	}
 
 	logger.Info(fmt.Sprintf("Fast Transfer allowance for domain %d: %s/%s %s",
-		sourceDomain, allowance.Allowance, allowance.MaxAllowance, token))
+		sourceDomain, allowance.Allowance.String(), allowance.MaxAllowance.String(), token))
 	return &allowance, nil
 }
 
@@ -120,8 +120,8 @@ func (m *AllowanceMonitor) queryAllowances() {
 		m.state.Set(domain, allowance)
 
 		// Export to Prometheus
-		if m.metrics != nil && allowance.Allowance != "" {
-			if val, err := strconv.ParseUint(allowance.Allowance, 10, 64); err == nil {
+		if m.metrics != nil {
+			if val, err := strconv.ParseUint(allowance.Allowance.String(), 10, 64); err == nil {
 				m.metrics.SetFastTransferAllowance(fmt.Sprintf("%d", domain), m.token, float64(val)/1e6)
 			}
 		}
