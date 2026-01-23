@@ -122,6 +122,13 @@ func Start(a *AppState) *cobra.Command {
 				registeredDomains[c.Domain()] = c
 			}
 
+			// Start Fast Transfer allowance monitor (v2 only)
+			var domains []types.Domain
+			for domain := range registeredDomains {
+				domains = append(domains, domain)
+			}
+			circle.StartAllowanceMonitor(cmd.Context(), cfg.Circle, logger, domains, metrics)
+
 			// spin up Processor worker pool
 			for i := 0; i < int(cfg.ProcessorWorkerCount); i++ {
 				go StartProcessor(cmd.Context(), a, registeredDomains, processingQueue, sequenceMap, metrics)
@@ -173,6 +180,12 @@ func StartProcessor(
 
 		var broadcastMsgs = make(map[types.Domain][]*types.MessageState)
 		var requeue bool
+
+		apiVersion, apiErr := cfg.Circle.GetAPIVersion()
+		if apiErr != nil {
+			logger.Debug("Failed to get API version", "error", apiErr)
+		}
+
 		for _, msg := range tx.Msgs {
 			// if a filter's condition is met, mark as filtered
 			if FilterDisabledCCTPRoutes(cfg, logger, msg) ||
@@ -185,7 +198,7 @@ func StartProcessor(
 
 			// if the message is burned or pending, check for an attestation
 			if msg.Status == types.Created || msg.Status == types.Pending {
-				response := circle.CheckAttestation(cfg.Circle.AttestationBaseURL, logger, msg.IrisLookupID, msg.SourceTxHash, msg.SourceDomain, msg.DestDomain)
+				response := circle.CheckAttestation(cfg.Circle, logger, msg.IrisLookupID, msg.SourceTxHash, msg.SourceDomain, msg.DestDomain)
 
 				switch {
 				case response == nil:
@@ -206,14 +219,53 @@ func StartProcessor(
 					continue
 				case response.Status == "complete":
 					logger.Debug("Attestation is complete for 0x" + msg.IrisLookupID + ".")
+
+					// Update state under lock
 					State.Mu.Lock()
 					msg.Status = types.Attested
 					msg.Attestation = response.Attestation
 					msg.Updated = time.Now()
-					broadcastMsgs[msg.DestDomain] = append(broadcastMsgs[msg.DestDomain], msg)
 					State.Mu.Unlock()
+
+					// Fetch message details for Fast Transfer expiration tracking
+					if apiVersion == types.APIVersionV2 {
+						msgResp, err := circle.GetAttestationV2Message(
+							cfg.Circle.AttestationBaseURL, logger, msg.SourceTxHash, msg.SourceDomain)
+						if err != nil {
+							logger.Debug("Failed to fetch v2 message details", "error", err, "txHash", msg.SourceTxHash)
+						} else if msgResp != nil {
+							State.Mu.Lock()
+							msg.CctpVersion = msgResp.CctpVersion
+							msg.ExpirationBlock = circle.ParseExpirationBlock(msgResp.ExpirationBlock)
+							State.Mu.Unlock()
+						}
+					}
+
+					broadcastMsgs[msg.DestDomain] = append(broadcastMsgs[msg.DestDomain], msg)
 				default:
 					logger.Error("Attestation failed for unknown reason for 0x" + msg.IrisLookupID + ".  Status: " + response.Status)
+				}
+			}
+
+			// Handle expired Fast Transfer attestations (v2 only)
+			if apiVersion == types.APIVersionV2 && msg.Status == types.Attested && msg.ExpirationBlock > 0 {
+				if destChain, ok := registeredDomains[msg.DestDomain]; ok {
+					result, err := circle.HandleExpiringAttestation(msg, cfg.Circle, destChain.LatestBlock(), logger)
+					if err != nil {
+						logger.Error("Re-attestation handling failed", "nonce", msg.Nonce, "error", err)
+					}
+
+					circle.ApplyReattestResult(State, msg, result)
+
+					if result.RemoveFromQueue {
+						circle.RemoveMessageFromQueue(broadcastMsgs, msg)
+						requeue = true
+						continue
+					}
+
+					if result.ExhaustedRetries {
+						continue
+					}
 				}
 			}
 		}

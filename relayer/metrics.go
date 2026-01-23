@@ -11,9 +11,10 @@ import (
 )
 
 type PromMetrics struct {
-	WalletBalance   *prometheus.GaugeVec
-	LatestHeight    *prometheus.GaugeVec
-	BroadcastErrors *prometheus.CounterVec
+	WalletBalance         *prometheus.GaugeVec
+	LatestHeight          *prometheus.GaugeVec
+	BroadcastErrors       *prometheus.CounterVec
+	FastTransferAllowance *prometheus.GaugeVec
 }
 
 func InitPromMetrics(address string, port int16) *PromMetrics {
@@ -24,6 +25,7 @@ func InitPromMetrics(address string, port int16) *PromMetrics {
 		walletLabels         = []string{"chain", "address", "denom"}
 		heightLabels         = []string{"chain", "domain"}
 		broadcastErrorLabels = []string{"chain", "domain"}
+		allowanceLabels      = []string{"domain", "token"}
 	)
 
 	m := &PromMetrics{
@@ -39,11 +41,16 @@ func InitPromMetrics(address string, port int16) *PromMetrics {
 			Name: "cctp_relayer_broadcast_errors_total",
 			Help: "The total number of failed broadcasts. Note: this is AFTER is retires `broadcast-retries` number of times (config setting).",
 		}, broadcastErrorLabels),
+		FastTransferAllowance: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "cctp_relayer_fast_transfer_allowance",
+			Help: "Current Fast Transfer allowance for a domain (v2 only)",
+		}, allowanceLabels),
 	}
 
 	reg.MustRegister(m.WalletBalance)
 	reg.MustRegister(m.LatestHeight)
 	reg.MustRegister(m.BroadcastErrors)
+	reg.MustRegister(m.FastTransferAllowance)
 
 	// Expose /metrics HTTP endpoint
 	go func() {
@@ -68,4 +75,8 @@ func (m *PromMetrics) SetLatestHeight(chain, domain string, height int64) {
 
 func (m *PromMetrics) IncBroadcastErrors(chain, domain string) {
 	m.BroadcastErrors.WithLabelValues(chain, domain).Inc()
+}
+
+func (m *PromMetrics) SetFastTransferAllowance(domain, token string, allowance float64) {
+	m.FastTransferAllowance.WithLabelValues(domain, token).Set(allowance)
 }

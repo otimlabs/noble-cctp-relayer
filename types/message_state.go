@@ -47,6 +47,13 @@ type MessageState struct {
 	Created           time.Time
 	Updated           time.Time
 	Nonce             uint64
+
+	// V2/Fast Transfer fields
+	CctpVersion       string
+	ExpirationBlock   uint64 // destination chain block when attestation expires
+	FinalityThreshold uint32
+	ReattestCount     uint
+	LastReattestTime  time.Time
 }
 
 // EvmLogToMessageState transforms an evm log into a messageState given an ABI
@@ -76,11 +83,17 @@ func EvmLogToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log)
 		Updated:           time.Now(),
 	}
 
+	// Try to parse as BurnMessage (standard CCTP burn/mint)
 	if _, err := new(BurnMessage).Parse(message.MessageBody); err == nil {
 		return messageState, nil
 	}
 
-	return nil, fmt.Errorf("unable to parse tx into message, err: %w", err)
+	// Try to parse as MetadataMessage (v2 fast transfer with metadata)
+	if _, err := new(MetadataMessage).Parse(message.MessageBody); err == nil {
+		return messageState, nil
+	}
+
+	return nil, fmt.Errorf("message body is not a valid CCTP BurnMessage or MetadataMessage format (length: %d bytes)", len(message.MessageBody))
 }
 
 // Equal checks if two MessageState instances are equal
@@ -96,5 +109,9 @@ func (m *MessageState) Equal(other *MessageState) bool {
 		bytes.Equal(m.DestinationCaller, other.DestinationCaller) &&
 		m.Channel == other.Channel &&
 		m.Created == other.Created &&
-		m.Updated == other.Updated)
+		m.Updated == other.Updated &&
+		m.CctpVersion == other.CctpVersion &&
+		m.ExpirationBlock == other.ExpirationBlock &&
+		m.FinalityThreshold == other.FinalityThreshold &&
+		m.ReattestCount == other.ReattestCount)
 }
