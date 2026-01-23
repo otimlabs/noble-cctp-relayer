@@ -83,11 +83,17 @@ func EvmLogToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log)
 		Updated:           time.Now(),
 	}
 
+	// Try to parse as BurnMessage (standard CCTP burn/mint)
 	if _, err := new(BurnMessage).Parse(message.MessageBody); err == nil {
 		return messageState, nil
 	}
 
-	return nil, fmt.Errorf("unable to parse tx into message, err: %w", err)
+	// Try to parse as MetadataMessage (v2 fast transfer with metadata)
+	if _, err := new(MetadataMessage).Parse(message.MessageBody); err == nil {
+		return messageState, nil
+	}
+
+	return nil, fmt.Errorf("message body is not a valid CCTP BurnMessage or MetadataMessage format (length: %d bytes)", len(message.MessageBody))
 }
 
 // Equal checks if two MessageState instances are equal

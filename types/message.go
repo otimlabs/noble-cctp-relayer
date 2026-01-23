@@ -55,7 +55,7 @@ func (msg *Message) Parse(bz []byte) (*Message, error) {
 	)
 
 	if len(bz) < MessageBodyIndex {
-		return nil, errors.New("")
+		return nil, errors.New("invalid Message length")
 	}
 
 	msg.Version = binary.BigEndian.Uint32(bz[VersionIndex:SourceDomainIndex])
@@ -81,7 +81,7 @@ func (c *BurnMessage) Parse(bz []byte) (*BurnMessage, error) {
 	)
 
 	if len(bz) != BurnContentLength {
-		return nil, errors.New("")
+		return nil, errors.New("invalid BurnMessage length")
 	}
 
 	c.Version = binary.BigEndian.Uint32(bz[VersionIndex:BurnTokenIndex])
@@ -104,7 +104,7 @@ func (c *MetadataMessage) Parse(bz []byte) (*MetadataMessage, error) {
 	)
 
 	if len(bz) < MemoIndex {
-		return nil, errors.New("")
+		return nil, errors.New("invalid MetadataMessage length")
 	}
 
 	c.Nonce = binary.BigEndian.Uint64(bz[NonceIndex:SenderIndex])
