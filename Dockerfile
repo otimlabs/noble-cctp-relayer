@@ -1,28 +1,12 @@
-FROM --platform=$BUILDPLATFORM golang:1.20-alpine AS build-env
+FROM golang:1.20-alpine AS build-env
 
-RUN apk add --update --no-cache curl make git libc-dev bash gcc linux-headers eudev-dev wget
-
-ARG TARGETARCH
-ARG BUILDARCH
-
-RUN if [ "${TARGETARCH}" = "arm64" ] && [ "${BUILDARCH}" != "arm64" ]; then \
-        wget --tries=5 --timeout=30 --retry-connrefused -c https://musl.cc/aarch64-linux-musl-cross.tgz -O /tmp/musl-cross.tgz && \
-        tar -xzvv --strip-components 1 -C /usr -f /tmp/musl-cross.tgz && \
-        rm -f /tmp/musl-cross.tgz; \
-    elif [ "${TARGETARCH}" = "amd64" ] && [ "${BUILDARCH}" != "amd64" ]; then \
-        wget --tries=5 --timeout=30 --retry-connrefused -c https://musl.cc/x86_64-linux-musl-cross.tgz -O /tmp/musl-cross.tgz && \
-        tar -xzvv --strip-components 1 -C /usr -f /tmp/musl-cross.tgz && \
-        rm -f /tmp/musl-cross.tgz; \
-    fi
+RUN apk add --update --no-cache curl make git libc-dev bash gcc linux-headers eudev-dev
 
 ADD . .
 
-RUN if [ "${TARGETARCH}" = "arm64" ] && [ "${BUILDARCH}" != "arm64" ]; then \
-        export CC=aarch64-linux-musl-gcc CXX=aarch64-linux-musl-g++;\
-    elif [ "${TARGETARCH}" = "amd64" ] && [ "${BUILDARCH}" != "amd64" ]; then \
-        export CC=x86_64-linux-musl-gcc CXX=x86_64-linux-musl-g++; \
-    fi; \
-    GOOS=linux GOARCH=$TARGETARCH CGO_ENABLED=1 \
+ARG TARGETARCH
+
+RUN GOOS=linux GOARCH=$TARGETARCH CGO_ENABLED=1 \
     LDFLAGS='-linkmode external -w -s -extldflags "-static"' \
     make install;
 
