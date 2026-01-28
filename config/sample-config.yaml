@@ -120,4 +120,14 @@ circle:
   allowance-monitor-token: "USDC"        # v2: token to monitor
   allowance-monitor-interval: 30         # v2: polling interval in seconds
 
+# mint-recipient-whitelist: list of destination mint recipient addresses to allow (empty or omitted means no filtering)
+# Only CCTP messages where the destination mint recipient is in this list will be relayed
+# This is the address that receives the minted tokens on the destination chain
+# Addresses can be in any case (0x prefix optional but recommended for hex addresses)
+# Example:
+# mint-recipient-whitelist:
+#   - "0x1234567890123456789012345678901234567890"  # Ethereum address (hex)
+#   - "noble1abc123def456..."  # Noble bech32 address
+#   - "So11111111111111111111111111111111111111112"  # Solana address (base58)
+
 processor-worker-count: 16

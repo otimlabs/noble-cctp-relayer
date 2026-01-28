@@ -6,10 +6,13 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	cctptypes "github.com/circlefin/noble-cctp/x/cctp/types"
+	"github.com/cosmos/cosmos-sdk/types/bech32"
 	"github.com/gin-gonic/gin"
+	"github.com/mr-tron/base58"
 	"github.com/spf13/cobra"
 
 	"cosmossdk.io/log"
@@ -190,7 +193,8 @@ func StartProcessor(
 			// if a filter's condition is met, mark as filtered
 			if FilterDisabledCCTPRoutes(cfg, logger, msg) ||
 				filterInvalidDestinationCallers(registeredDomains, logger, msg) ||
-				filterLowTransfers(cfg, logger, msg) {
+				filterLowTransfers(cfg, logger, msg) ||
+				filterNonWhitelistedMintRecipients(cfg, logger, msg) {
 				State.Mu.Lock()
 				msg.Status = types.Filtered
 				State.Mu.Unlock()
@@ -385,6 +389,126 @@ func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.Message
 	}
 
 	return false
+}
+
+// getMintRecipientAddress extracts the mint recipient address from a MessageState
+// The mint recipient is in the BurnMessage (MessageBody), stored as 32 bytes
+// For Ethereum chains (domains 0,1,2,3), returns hex address (0x...) - uses last 20 bytes
+// For Noble (domain 4), returns bech32 address (noble1...) - uses last 20 bytes
+// For Solana (domain 5), returns base58 address - uses full 32 bytes
+func getMintRecipientAddress(msg *types.MessageState) (string, error) {
+	// Parse the BurnMessage from the MessageBody
+	burnMsg, err := new(cctptypes.BurnMessage).Parse(msg.MsgBody)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse burn message: %w", err)
+	}
+
+	// If destination domain is Solana (5), use full 32 bytes and encode as base58
+	if msg.DestDomain == types.Domain(5) {
+		if len(burnMsg.MintRecipient) != 32 {
+			return "", fmt.Errorf("Solana address must be 32 bytes, got %d bytes", len(burnMsg.MintRecipient))
+		}
+		// Solana addresses are base58-encoded 32-byte public keys
+		return base58.Encode(burnMsg.MintRecipient), nil
+	}
+
+	// For Ethereum and Noble, the address is 20 bytes padded with 12 leading zeros
+	if len(burnMsg.MintRecipient) < 20 {
+		return "", fmt.Errorf("mint recipient field too short: %d bytes", len(burnMsg.MintRecipient))
+	}
+
+	// Extract the last 20 bytes (the actual address)
+	addressBytes := burnMsg.MintRecipient[len(burnMsg.MintRecipient)-20:]
+
+	// If destination domain is Noble (4), convert to bech32 address
+	if msg.DestDomain == types.Domain(4) {
+		bech32Addr, err := bech32.ConvertAndEncode("noble", addressBytes)
+		if err != nil {
+			return "", fmt.Errorf("failed to convert Noble address to bech32: %w", err)
+		}
+		return bech32Addr, nil
+	}
+
+	// For Ethereum chains, return hex address
+	return fmt.Sprintf("0x%x", addressBytes), nil
+}
+
+// normalizeAddress normalizes an address for comparison
+// For hex addresses (0x...), converts to lowercase and ensures 0x prefix
+// For bech32 addresses (noble1...), converts to lowercase
+// For Solana addresses (base58), keeps as-is (base58 is case-sensitive)
+func normalizeAddress(addr string) string {
+	addr = strings.TrimSpace(addr)
+	
+	// If it's a bech32 address (starts with "noble1"), convert to lowercase
+	lowerAddr := strings.ToLower(addr)
+	if strings.HasPrefix(lowerAddr, "noble1") {
+		return lowerAddr
+	}
+	
+	// If it's a hex address (starts with "0x" or looks like hex), normalize it
+	if strings.HasPrefix(lowerAddr, "0x") {
+		return lowerAddr
+	}
+	
+	// Check if it might be a hex address without 0x prefix (40 hex chars = 20 bytes)
+	if len(addr) == 40 {
+		// Try to validate it's hex
+		isHex := true
+		for _, c := range addr {
+			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+				isHex = false
+				break
+			}
+		}
+		if isHex {
+			return "0x" + lowerAddr
+		}
+	}
+	
+	// For Solana addresses (base58, typically 32-44 chars), keep as-is
+	// Base58 addresses are case-sensitive, so we don't normalize them
+	// They don't start with 0x or noble1, and are typically 32-44 characters
+	if len(addr) >= 32 && len(addr) <= 44 {
+		return addr
+	}
+	
+	// Default: assume it's a hex address without prefix
+	return "0x" + lowerAddr
+}
+
+// filterNonWhitelistedMintRecipients returns true if the mint recipient is not in the whitelist
+// If the whitelist is empty, no filtering is performed (returns false)
+func filterNonWhitelistedMintRecipients(cfg *types.Config, logger log.Logger, msg *types.MessageState) bool {
+	// If whitelist is empty, don't filter
+	if len(cfg.MintRecipientWhitelist) == 0 {
+		return false
+	}
+
+	mintRecipientAddr, err := getMintRecipientAddress(msg)
+	if err != nil {
+		logger.Error("Failed to extract mint recipient address, filtering message", "error", err, "source_tx", msg.SourceTxHash)
+		return true
+	}
+
+	normalizedRecipient := normalizeAddress(mintRecipientAddr)
+
+	// Check if mint recipient is in whitelist
+	for _, whitelistedAddr := range cfg.MintRecipientWhitelist {
+		if normalizeAddress(whitelistedAddr) == normalizedRecipient {
+			return false // Mint recipient is whitelisted, don't filter
+		}
+	}
+
+	// Mint recipient not in whitelist, filter it out
+	logger.Info(
+		"Filtered tx because mint recipient is not in whitelist",
+		"source_tx", msg.SourceTxHash,
+		"mint_recipient", mintRecipientAddr,
+		"source_domain", msg.SourceDomain,
+		"dest_domain", msg.DestDomain,
+	)
+	return true
 }
 
 func startAPI(a *AppState) {
