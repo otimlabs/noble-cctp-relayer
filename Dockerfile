@@ -2,13 +2,26 @@ FROM golang:1.20-alpine AS build-env
 
 RUN apk add --update --no-cache curl make git libc-dev bash gcc linux-headers eudev-dev
 
-ADD . .
+WORKDIR /src
+
+# Copy go mod files first for better layer caching
+COPY go.mod go.sum ./
+
+# Download dependencies in a separate layer so they can be cached
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+
+# Copy source code
+COPY . .
 
 ARG TARGETARCH
 
-RUN GOOS=linux GOARCH=$TARGETARCH CGO_ENABLED=1 \
+# Build with module cache mount for faster builds
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    GOOS=linux GOARCH=$TARGETARCH CGO_ENABLED=1 \
     LDFLAGS='-linkmode external -w -s -extldflags "-static"' \
-    make install;
+    make install
 
 RUN if [ -d "/go/bin/linux_${TARGETARCH}" ]; then mv /go/bin/linux_${TARGETARCH}/* /go/bin/; fi
 
@@ -68,7 +81,7 @@ RUN for b in \
 RUN rm ln rm
 
 # Install chain binaries
-COPY --from=build-env /bin/noble-cctp-relayer /bin
+COPY --from=build-env /go/bin/noble-cctp-relayer /bin
 
 # Install trusted CA certificates
 COPY --from=busybox-min /etc/ssl/cert.pem /etc/ssl/cert.pem
