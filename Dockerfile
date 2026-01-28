@@ -1,4 +1,4 @@
-FROM golang:1.20-alpine AS build-env
+FROM golang:1.25.7-alpine AS build-env
 
 RUN apk add --update --no-cache curl make git libc-dev bash gcc linux-headers eudev-dev
 
@@ -11,7 +11,6 @@ COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
-# Copy source code
 COPY . .
 
 ARG TARGETARCH
@@ -80,7 +79,7 @@ RUN for b in \
 #  Remove write utils
 RUN rm ln rm
 
-# Install chain binaries
+# Install relayer binaries
 COPY --from=build-env /go/bin/noble-cctp-relayer /bin
 
 # Install trusted CA certificates
