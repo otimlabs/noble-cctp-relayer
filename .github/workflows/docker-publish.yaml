@@ -39,11 +39,14 @@ jobs:
 
       - name: Build and push
         uses: docker/build-push-action@v6
+        timeout-minutes: 60
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: |
+            type=gha,scope=buildkit-${{ github.ref_name }}
+            type=gha,scope=buildkit-main
+          cache-to: type=gha,mode=max,scope=buildkit-${{ github.ref_name }}

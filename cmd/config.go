@@ -11,6 +11,7 @@ import (
 
 	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
 	"github.com/strangelove-ventures/noble-cctp-relayer/noble"
+	"github.com/strangelove-ventures/noble-cctp-relayer/solana"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
@@ -82,6 +83,12 @@ func ParseConfig(file string) (*types.Config, error) {
 		switch name {
 		case "noble":
 			var cc noble.ChainConfig
+			if err := yaml.Unmarshal(yamlbz, &cc); err != nil {
+				return nil, err
+			}
+			c.Chains[name] = &cc
+		case "solana":
+			var cc solana.ChainConfig
 			if err := yaml.Unmarshal(yamlbz, &cc); err != nil {
 				return nil, err
 			}
