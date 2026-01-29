@@ -101,13 +101,33 @@ chains:
 
     minter-private-key: "" 
 
+  solana:
+    domain: 5
+    rpc: "https://api.mainnet-beta.solana.com"
+    ws: ""
+    message-transmitter: "CCTPV2Sm4AdWt5296sk4P66VBZ7bEhcARwFaaS9YPbeC"
+    token-messenger-minter: "CCTPV2vPZJS2u2BBsUoscuikbYjnpFmbFsvVuJdgUMQe"
+
+    start-block: 0
+    lookback-period: 100  # ~400ms block time
+
+    broadcast-retries: 5
+    broadcast-retry-interval: 10
+
+    min-mint-amount: 10000000
+
+    metrics-denom: "SOL"
+    metrics-exponent: 9  # 1 SOL = 1e9 lamports
+
+    minter-private-key: ""  # base58 encoded Solana private key
+
 # source domain id -> []destination domain id
 enabled-routes:
-  0: [4] # ethereum -> noble
+  0: [4, 5] # ethereum -> noble, solana
   1: [4] # avalanche -> noble
   2: [4] # optimism -> noble
   3: [4] # arbitrum -> noble
-  4: [0,1,2,3] # noble -> ethereum, avalanche, optimism, arbitrum
+  4: [0,1,2,3,5] # noble -> ethereum, avalanche, optimism, arbitrum, solana
 
 circle:
   attestation-base-url: "https://iris-api-sandbox.circle.com/attestations/"
@@ -119,5 +139,8 @@ circle:
   expiration-buffer-blocks: 100          # v2: blocks before expiry to re-attest
   allowance-monitor-token: "USDC"        # v2: token to monitor
   allowance-monitor-interval: 30         # v2: polling interval in seconds
+
+# Only process transfers explicitly sent to this relayer's minter address
+destination-caller-only: false
 
 processor-worker-count: 16
