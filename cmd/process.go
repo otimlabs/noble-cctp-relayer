@@ -176,6 +176,9 @@ func StartProcessor(
 			tx, _ = State.Load(dequeuedTx.TxHash)
 			for _, msg := range tx.Msgs {
 				msg.Status = types.Created
+				if metrics != nil {
+					metrics.IncAttestation("observed", fmt.Sprint(msg.SourceDomain), fmt.Sprint(msg.DestDomain))
+				}
 			}
 		}
 
@@ -188,13 +191,21 @@ func StartProcessor(
 		}
 
 		for _, msg := range tx.Msgs {
+			srcDomain := fmt.Sprint(msg.SourceDomain)
+			destDomain := fmt.Sprint(msg.DestDomain)
+
 			// if a filter's condition is met, mark as filtered
 			if FilterDisabledCCTPRoutes(cfg, logger, msg) ||
 				filterInvalidDestinationCallers(registeredDomains, logger, msg, cfg.DestinationCallerOnly) ||
 				filterLowTransfers(cfg, logger, msg) {
 				State.Mu.Lock()
+				prevStatus := msg.Status
 				msg.Status = types.Filtered
 				State.Mu.Unlock()
+				// Only increment metric on first transition to filtered
+				if metrics != nil && prevStatus != types.Filtered {
+					metrics.IncAttestation("filtered", srcDomain, destDomain)
+				}
 			}
 
 			// if the message is burned or pending, check for an attestation
@@ -212,6 +223,10 @@ func StartProcessor(
 					msg.Status = types.Pending
 					msg.Updated = time.Now()
 					State.Mu.Unlock()
+					if metrics != nil {
+						metrics.IncAttestation("pending", srcDomain, destDomain)
+						metrics.IncPending(srcDomain, destDomain)
+					}
 					requeue = true
 					continue
 				case response.Status == "pending_confirmations":
@@ -223,10 +238,17 @@ func StartProcessor(
 
 					// Update state under lock
 					State.Mu.Lock()
+					prevStatus := msg.Status
 					msg.Status = types.Attested
 					msg.Attestation = response.Attestation
 					msg.Updated = time.Now()
 					State.Mu.Unlock()
+					if metrics != nil {
+						metrics.IncAttestation("complete", srcDomain, destDomain)
+						if prevStatus == types.Pending {
+							metrics.DecPending(srcDomain, destDomain)
+						}
+					}
 
 					// Fetch message details for Fast Transfer expiration tracking
 					if apiVersion == types.APIVersionV2 {
@@ -245,6 +267,9 @@ func StartProcessor(
 					broadcastMsgs[msg.DestDomain] = append(broadcastMsgs[msg.DestDomain], msg)
 				default:
 					logger.Error("Attestation failed for unknown reason for 0x" + msg.IrisLookupID + ".  Status: " + response.Status)
+					if metrics != nil {
+						metrics.IncAttestation("failed", srcDomain, destDomain)
+					}
 				}
 			}
 
@@ -291,6 +316,12 @@ func StartProcessor(
 				msg.Updated = time.Now()
 			}
 			State.Mu.Unlock()
+
+			if metrics != nil {
+				for range msgs {
+					metrics.IncMintSuccess(chain.Name(), fmt.Sprint(domain))
+				}
+			}
 		}
 
 		// requeue txs, ensure not to exceed retry limit
