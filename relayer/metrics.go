@@ -15,6 +15,7 @@ type PromMetrics struct {
 	LatestHeight          *prometheus.GaugeVec
 	BroadcastErrors       *prometheus.CounterVec
 	FastTransferAllowance *prometheus.GaugeVec
+	DepositorFiltered     *prometheus.CounterVec
 }
 
 func InitPromMetrics(address string, port int16) *PromMetrics {
@@ -26,6 +27,7 @@ func InitPromMetrics(address string, port int16) *PromMetrics {
 		heightLabels         = []string{"chain", "domain"}
 		broadcastErrorLabels = []string{"chain", "domain"}
 		allowanceLabels      = []string{"domain", "token"}
+		depositorLabels      = []string{"source_domain", "dest_domain"}
 	)
 
 	m := &PromMetrics{
@@ -45,12 +47,17 @@ func InitPromMetrics(address string, port int16) *PromMetrics {
 			Name: "cctp_relayer_fast_transfer_allowance",
 			Help: "Current Fast Transfer allowance for a domain (v2 only)",
 		}, allowanceLabels),
+		DepositorFiltered: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "cctp_relayer_depositor_filtered_total",
+			Help: "The total number of messages filtered by depositor whitelist",
+		}, depositorLabels),
 	}
 
 	reg.MustRegister(m.WalletBalance)
 	reg.MustRegister(m.LatestHeight)
 	reg.MustRegister(m.BroadcastErrors)
 	reg.MustRegister(m.FastTransferAllowance)
+	reg.MustRegister(m.DepositorFiltered)
 
 	// Expose /metrics HTTP endpoint
 	go func() {
@@ -79,4 +86,8 @@ func (m *PromMetrics) IncBroadcastErrors(chain, domain string) {
 
 func (m *PromMetrics) SetFastTransferAllowance(domain, token string, allowance float64) {
 	m.FastTransferAllowance.WithLabelValues(domain, token).Set(allowance)
+}
+
+func (m *PromMetrics) IncDepositorFiltered(sourceDomain, destDomain string) {
+	m.DepositorFiltered.WithLabelValues(sourceDomain, destDomain).Inc()
 }

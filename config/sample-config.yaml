@@ -1,6 +1,6 @@
 chains:
   noble:
-    rpc: #noble RPC; for stability, use a reliable private node 
+    rpc: #noble RPC; for stability, use a reliable private node
     chain-id: "grand-1"
 
     start-block: 0 # set to 0 to default to latest block
@@ -99,7 +99,7 @@ chains:
     metrics-denom: "AVAX"
     metrics-exponent: 18
 
-    minter-private-key: "" 
+    minter-private-key: ""
 
   solana:
     domain: 5
@@ -109,7 +109,7 @@ chains:
     token-messenger-minter: "CCTPV2vPZJS2u2BBsUoscuikbYjnpFmbFsvVuJdgUMQe"
 
     start-block: 0
-    lookback-period: 100  # ~400ms block time
+    lookback-period: 100 # ~400ms block time
 
     broadcast-retries: 5
     broadcast-retry-interval: 10
@@ -117,9 +117,9 @@ chains:
     min-mint-amount: 10000000
 
     metrics-denom: "SOL"
-    metrics-exponent: 9  # 1 SOL = 1e9 lamports
+    metrics-exponent: 9 # 1 SOL = 1e9 lamports
 
-    minter-private-key: ""  # base58 encoded Solana private key
+    minter-private-key: "" # base58 encoded Solana private key
 
 # source domain id -> []destination domain id
 enabled-routes:
@@ -127,20 +127,27 @@ enabled-routes:
   1: [4] # avalanche -> noble
   2: [4] # optimism -> noble
   3: [4] # arbitrum -> noble
-  4: [0,1,2,3,5] # noble -> ethereum, avalanche, optimism, arbitrum, solana
+  4: [0, 1, 2, 3, 5] # noble -> ethereum, avalanche, optimism, arbitrum, solana
 
 circle:
   attestation-base-url: "https://iris-api-sandbox.circle.com/attestations/"
-  api-version: "v1"                      # "v1" or "v2"
+  api-version: "v1" # "v1" or "v2"
   fetch-retries: 30 # additional times to fetch an attestation
   fetch-retry-interval: 3 # time between retries in seconds
   enable-fast-transfer-monitoring: false # v2: monitor allowance
-  reattest-max-retries: 3                # v2: max re-attestation attempts
-  expiration-buffer-blocks: 100          # v2: blocks before expiry to re-attest
-  allowance-monitor-token: "USDC"        # v2: token to monitor
-  allowance-monitor-interval: 30         # v2: polling interval in seconds
+  reattest-max-retries: 3 # v2: max re-attestation attempts
+  expiration-buffer-blocks: 100 # v2: blocks before expiry to re-attest
+  allowance-monitor-token: "USDC" # v2: token to monitor
+  allowance-monitor-interval: 30 # v2: polling interval in seconds
 
 # Only process transfers explicitly sent to this relayer's minter address
 destination-caller-only: false
+
+# Depositor whitelist filter (applies to EVM chains only)
+depositor-whitelist:
+  enabled: false # set to true to enable whitelist filtering
+  quicknode-api-key: "" # QuickNode API key (can also be set via QUICKNODE_API_KEY env var)
+  quicknode-kv-key: "cctp-depositor-whitelist" # Key name in QuickNode KV store
+  refresh-interval: 300 # Refresh interval in seconds (default: 300 = 5 minutes if omitted or set to 0)
 
 processor-worker-count: 16

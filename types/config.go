@@ -1,9 +1,10 @@
 package types
 
 type Config struct {
-	Chains        map[string]ChainConfig `yaml:"chains"`
-	EnabledRoutes map[Domain][]Domain    `yaml:"enabled-routes"`
-	Circle        CircleSettings         `yaml:"circle"`
+	Chains             map[string]ChainConfig   `yaml:"chains"`
+	EnabledRoutes      map[Domain][]Domain      `yaml:"enabled-routes"`
+	Circle             CircleSettings           `yaml:"circle"`
+	DepositorWhitelist DepositorWhitelistConfig `yaml:"depositor-whitelist"`
 
 	ProcessorWorkerCount  uint32 `yaml:"processor-worker-count"`
 	DestinationCallerOnly bool   `yaml:"destination-caller-only"`
@@ -13,9 +14,10 @@ type Config struct {
 }
 
 type ConfigWrapper struct {
-	Chains        map[string]map[string]any `yaml:"chains"`
-	EnabledRoutes map[Domain][]Domain       `yaml:"enabled-routes"`
-	Circle        CircleSettings            `yaml:"circle"`
+	Chains             map[string]map[string]any `yaml:"chains"`
+	EnabledRoutes      map[Domain][]Domain       `yaml:"enabled-routes"`
+	Circle             CircleSettings            `yaml:"circle"`
+	DepositorWhitelist DepositorWhitelistConfig  `yaml:"depositor-whitelist"`
 
 	ProcessorWorkerCount  uint32 `yaml:"processor-worker-count"`
 	DestinationCallerOnly bool   `yaml:"destination-caller-only"`
@@ -41,6 +43,13 @@ type CircleSettings struct {
 // GetAPIVersion returns the parsed API version
 func (c *CircleSettings) GetAPIVersion() (APIVersion, error) {
 	return ParseAPIVersion(c.APIVersion)
+}
+
+type DepositorWhitelistConfig struct {
+	Enabled         bool   `yaml:"enabled"`
+	QuickNodeAPIKey string `yaml:"quicknode-api-key"`
+	QuickNodeKVKey  string `yaml:"quicknode-kv-key"` // The key name in KV store
+	RefreshInterval uint   `yaml:"refresh-interval"` // seconds (default: 300 = 5 minutes if omitted or 0)
 }
 
 type ChainConfig interface {
