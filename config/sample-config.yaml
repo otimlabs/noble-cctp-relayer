@@ -147,7 +147,7 @@ destination-caller-only: false
 filters:
   # Depositor whitelist filter
   - name: "depositor-whitelist"
-    enabled: false # set to true to enable
+    enabled: true
     config:
       provider: "quicknode-kv"
       provider_config:

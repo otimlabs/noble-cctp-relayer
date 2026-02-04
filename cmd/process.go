@@ -27,8 +27,8 @@ var State = types.NewStateMap()
 // SequenceMap maps the domain -> the equivalent minter account sequence or nonce
 var sequenceMap = types.NewSequenceMap()
 
-// filterRegistry holds all registered message filters
-var filterRegistry *types.FilterRegistry
+// FilterRegistry holds all registered message filters
+var FilterRegistry *types.FilterRegistry
 
 func Start(a *AppState) *cobra.Command {
 	cmd := &cobra.Command{
@@ -129,7 +129,6 @@ func Start(a *AppState) *cobra.Command {
 			}
 			circle.StartAllowanceMonitor(cmd.Context(), cfg.Circle, logger, domains, metrics)
 
-			// Initialize filter registry (includes legacy filters + custom filters)
 			if err := initializeFilters(cmd.Context(), cfg, logger, registeredDomains); err != nil {
 				return fmt.Errorf("failed to initialize filters: %w", err)
 			}
@@ -151,9 +150,8 @@ func Start(a *AppState) *cobra.Command {
 				}
 			}
 
-			// Close filter registry
-			if filterRegistry != nil {
-				if err := filterRegistry.Close(); err != nil {
+			if FilterRegistry != nil {
+				if err := FilterRegistry.Close(); err != nil {
 					logger.Error("Error closing filter registry", "error", err)
 				}
 			}
@@ -219,8 +217,8 @@ func StartProcessor(
 			shouldFilter := false
 			var filterReason string
 
-			if filterRegistry != nil {
-				filtered, reason := filterRegistry.Filter(ctx, msg)
+			if FilterRegistry != nil {
+				filtered, reason := FilterRegistry.Filter(ctx, msg)
 				if filtered {
 					shouldFilter = true
 					filterReason = reason
@@ -375,19 +373,17 @@ func StartProcessor(
 
 // initializeFilters creates and initializes the filter registry with configured filters
 func initializeFilters(ctx context.Context, cfg *types.Config, logger log.Logger, registeredDomains map[types.Domain]types.Chain) error {
-	filterRegistry = types.NewFilterRegistry(logger)
+	FilterRegistry = types.NewFilterRegistry(logger)
 
-	// Register legacy filters as plugins
-	// 1. Route filter
+	// Register base filters as plugins
 	routeFilter := filters.NewRouteFilter()
 	if err := routeFilter.Initialize(ctx, map[string]interface{}{
 		"enabled_routes": cfg.EnabledRoutes,
 	}, logger); err != nil {
 		return fmt.Errorf("failed to initialize route filter: %w", err)
 	}
-	filterRegistry.Register(routeFilter)
+	FilterRegistry.Register(routeFilter)
 
-	// 2. Destination caller filter
 	destCallerFilter := filters.NewDestinationCallerFilter()
 	if err := destCallerFilter.Initialize(ctx, map[string]interface{}{
 		"registered_domains":      registeredDomains,
@@ -395,16 +391,15 @@ func initializeFilters(ctx context.Context, cfg *types.Config, logger log.Logger
 	}, logger); err != nil {
 		return fmt.Errorf("failed to initialize destination-caller filter: %w", err)
 	}
-	filterRegistry.Register(destCallerFilter)
+	FilterRegistry.Register(destCallerFilter)
 
-	// 3. Low transfer filter
 	lowTransferFilter := filters.NewLowTransferFilter()
 	if err := lowTransferFilter.Initialize(ctx, map[string]interface{}{
 		"chains": cfg.Chains,
 	}, logger); err != nil {
 		return fmt.Errorf("failed to initialize low-transfer filter: %w", err)
 	}
-	filterRegistry.Register(lowTransferFilter)
+	FilterRegistry.Register(lowTransferFilter)
 
 	// Register user-configured filters from config
 	for _, filterCfg := range cfg.Filters {
@@ -426,16 +421,11 @@ func initializeFilters(ctx context.Context, cfg *types.Config, logger log.Logger
 			return fmt.Errorf("failed to initialize filter %s: %w", filterCfg.Name, err)
 		}
 
-		filterRegistry.Register(filter)
+		FilterRegistry.Register(filter)
 		logger.Info("Registered custom filter", "name", filterCfg.Name)
 	}
 
 	return nil
-}
-
-// InitializeFiltersForTest initializes filters for testing purposes
-func InitializeFiltersForTest(ctx context.Context, cfg *types.Config, logger log.Logger, registeredDomains map[types.Domain]types.Chain) error {
-	return initializeFilters(ctx, cfg, logger, registeredDomains)
 }
 
 func startAPI(a *AppState) {

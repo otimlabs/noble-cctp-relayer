@@ -8,8 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"cosmossdk.io/log"
 	"github.com/ethereum/go-ethereum/common"
+
+	"cosmossdk.io/log"
+
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
@@ -201,27 +203,10 @@ func getDepositor(msg *types.MessageState) (string, error) {
 }
 
 func isEVMDomain(domain types.Domain) bool {
-	// EVM-compatible chains in CCTP
-	evmDomains := map[types.Domain]bool{
-		0:  true, // Ethereum
-		1:  true, // Avalanche
-		2:  true, // OP Mainnet
-		3:  true, // Arbitrum
-		6:  true, // Base
-		7:  true, // Polygon PoS
-		10: true, // Unichain
-		11: true, // Linea
-		12: true, // Codex
-		13: true, // Sonic
-		14: true, // World Chain
-		16: true, // Sei
-		17: true, // BNB Smart Chain
-		18: true, // XDC
-		19: true, // HyperEVM
-		21: true, // Ink
-		22: true, // Plume
-		26: true, // Arc Testnet
-		// Non-EVM chains: 4 (Noble), 5 (Solana), 15 (Monad), 25 (Starknet Testnet)
+	switch domain {
+	case 4, 5, 15, 25: // Noble, Solana, Monad, Starknet Testnet
+		return false
+	default:
+		return true
 	}
-	return evmDomains[domain]
 }
