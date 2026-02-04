@@ -31,6 +31,14 @@ var State = types.NewStateMap()
 // SequenceMap maps the domain -> the equivalent minter account sequence or nonce
 var sequenceMap = types.NewSequenceMap()
 
+// whitelistManager manages the depositor whitelist (nil if disabled)
+var whitelistManager *types.WhitelistManager
+
+// SetWhitelistManagerForTesting sets the whitelist manager (for testing only)
+func SetWhitelistManagerForTesting(wm *types.WhitelistManager) {
+	whitelistManager = wm
+}
+
 func Start(a *AppState) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -130,6 +138,26 @@ func Start(a *AppState) *cobra.Command {
 			}
 			circle.StartAllowanceMonitor(cmd.Context(), cfg.Circle, logger, domains, metrics)
 
+			// Initialize depositor whitelist if enabled
+			if cfg.DepositorWhitelist.Enabled {
+				apiKey := cfg.DepositorWhitelist.QuickNodeAPIKey
+				if apiKey == "" {
+					return fmt.Errorf("depositor whitelist enabled but quicknode-api-key not set")
+				}
+
+				whitelistManager = types.NewWhitelistManager(
+					apiKey,
+					cfg.DepositorWhitelist.QuickNodeKVKey,
+					cfg.DepositorWhitelist.RefreshInterval,
+					logger,
+				)
+				whitelistManager.Start(cmd.Context())
+
+				logger.Info("Depositor whitelist enabled",
+					"kv_key", cfg.DepositorWhitelist.QuickNodeKVKey,
+					"refresh_interval", cfg.DepositorWhitelist.RefreshInterval)
+			}
+
 			// spin up Processor worker pool
 			for i := 0; i < int(cfg.ProcessorWorkerCount); i++ {
 				go StartProcessor(cmd.Context(), a, registeredDomains, processingQueue, sequenceMap, metrics)
@@ -191,7 +219,8 @@ func StartProcessor(
 			// if a filter's condition is met, mark as filtered
 			if FilterDisabledCCTPRoutes(cfg, logger, msg) ||
 				filterInvalidDestinationCallers(registeredDomains, logger, msg, cfg.DestinationCallerOnly) ||
-				filterLowTransfers(cfg, logger, msg) {
+				filterLowTransfers(cfg, logger, msg) ||
+				FilterNonWhitelistedDepositors(logger, msg, metrics) {
 				State.Mu.Lock()
 				msg.Status = types.Filtered
 				State.Mu.Unlock()
@@ -349,6 +378,71 @@ func filterInvalidDestinationCallers(registeredDomains map[types.Domain]types.Ch
 	}
 
 	return shouldFilter
+}
+
+// isEVMDomain returns true if the domain is an EVM-compatible chain
+func isEVMDomain(domain types.Domain) bool {
+	// EVM-compatible chains in CCTP
+	evmDomains := map[types.Domain]bool{
+		0:  true, // Ethereum
+		1:  true, // Avalanche
+		2:  true, // OP Mainnet
+		3:  true, // Arbitrum
+		6:  true, // Base
+		7:  true, // Polygon PoS
+		10: true, // Unichain
+		11: true, // Linea
+		12: true, // Codex
+		13: true, // Sonic
+		14: true, // World Chain
+		16: true, // Sei
+		17: true, // BNB Smart Chain
+		18: true, // XDC
+		19: true, // HyperEVM
+		21: true, // Ink
+		22: true, // Plume
+		26: true, // Arc Testnet
+		// Non-EVM chains: 4 (Noble), 5 (Solana), 15 (Monad), 25 (Starknet Testnet)
+	}
+	return evmDomains[domain]
+}
+
+// FilterNonWhitelistedDepositors filters messages from non-whitelisted depositors on EVM chains
+func FilterNonWhitelistedDepositors(logger log.Logger, msg *types.MessageState, metrics *relayer.PromMetrics) bool {
+	// Only apply to EVM source chains
+	if !isEVMDomain(msg.SourceDomain) {
+		return false
+	}
+
+	// If whitelist is not enabled, don't filter
+	if whitelistManager == nil {
+		return false
+	}
+
+	// Extract depositor address
+	depositor, err := msg.GetDepositor()
+	if err != nil {
+		logger.Error("Failed to extract depositor address, filtering message",
+			"tx", msg.SourceTxHash,
+			"error", err)
+		return true
+	}
+
+	// Check if depositor is whitelisted
+	if !whitelistManager.IsWhitelisted(depositor) {
+		logger.Info(fmt.Sprintf("Filtered tx from non-whitelisted depositor: tx=%s depositor=%s source_domain=%d dest_domain=%d",
+			msg.SourceTxHash, depositor, msg.SourceDomain, msg.DestDomain))
+
+		// Increment metrics
+		metrics.IncDepositorFiltered(
+			fmt.Sprintf("%d", msg.SourceDomain),
+			fmt.Sprintf("%d", msg.DestDomain),
+		)
+
+		return true
+	}
+
+	return false
 }
 
 // filterLowTransfers returns true if the amount being transferred to the destination chain is lower than the min-mint-amount configured

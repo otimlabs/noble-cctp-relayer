@@ -96,6 +96,23 @@ func EvmLogToMessageState(abi abi.ABI, messageSent abi.Event, log *ethtypes.Log)
 	return nil, fmt.Errorf("message body is not a valid CCTP BurnMessage or MetadataMessage format (length: %d bytes)", len(message.MessageBody))
 }
 
+// GetDepositor extracts the depositor address from the BurnMessage in MsgBody
+// Returns the address in 0x-prefixed hex format
+func (m *MessageState) GetDepositor() (string, error) {
+	burnMsg, err := new(BurnMessage).Parse(m.MsgBody)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse burn message: %w", err)
+	}
+
+	// MessageSender is 32 bytes, take last 20 bytes for Ethereum address
+	if len(burnMsg.MessageSender) < 20 {
+		return "", fmt.Errorf("invalid MessageSender length: %d", len(burnMsg.MessageSender))
+	}
+
+	address := burnMsg.MessageSender[len(burnMsg.MessageSender)-20:]
+	return "0x" + hex.EncodeToString(address), nil
+}
+
 // Equal checks if two MessageState instances are equal
 func (m *MessageState) Equal(other *MessageState) bool {
 	return (m.IrisLookupID == other.IrisLookupID &&

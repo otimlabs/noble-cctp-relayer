@@ -67,11 +67,18 @@ func ParseConfig(file string) (*types.Config, error) {
 	}
 
 	c := types.Config{
-		EnabledRoutes:        cfg.EnabledRoutes,
-		Circle:               cfg.Circle,
-		ProcessorWorkerCount: cfg.ProcessorWorkerCount,
-		API:                  cfg.API,
-		Chains:               make(map[string]types.ChainConfig),
+		EnabledRoutes:         cfg.EnabledRoutes,
+		Circle:                cfg.Circle,
+		DepositorWhitelist:    cfg.DepositorWhitelist,
+		ProcessorWorkerCount:  cfg.ProcessorWorkerCount,
+		DestinationCallerOnly: cfg.DestinationCallerOnly,
+		API:                   cfg.API,
+		Chains:                make(map[string]types.ChainConfig),
+	}
+
+	// Support environment variable for QuickNode API key
+	if quickNodeAPIKey := os.Getenv("QUICKNODE_API_KEY"); quickNodeAPIKey != "" {
+		c.DepositorWhitelist.QuickNodeAPIKey = quickNodeAPIKey
 	}
 
 	for name, chain := range cfg.Chains {
