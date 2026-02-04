@@ -17,7 +17,6 @@ type PromMetrics struct {
 	FastTransferAllowance *prometheus.GaugeVec
 	AttestationTotal      *prometheus.CounterVec
 	AttestationPending    *prometheus.GaugeVec
-	MintSuccess           *prometheus.CounterVec
 }
 
 func InitPromMetrics(address string, port int16) *PromMetrics {
@@ -29,9 +28,8 @@ func InitPromMetrics(address string, port int16) *PromMetrics {
 		heightLabels         = []string{"chain", "domain"}
 		broadcastErrorLabels = []string{"chain", "domain"}
 		allowanceLabels      = []string{"domain", "token"}
-		attestationLabels    = []string{"status", "source_domain", "dest_domain"}
+		attestationLabels    = []string{"status", "source_domain", "dest_domain", "dest_chain"}
 		pendingLabels        = []string{"source_domain", "dest_domain"}
-		mintLabels           = []string{"chain", "domain"}
 	)
 
 	m := &PromMetrics{
@@ -53,16 +51,12 @@ func InitPromMetrics(address string, port int16) *PromMetrics {
 		}, allowanceLabels),
 		AttestationTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "cctp_relayer_attestation_total",
-			Help: "Attestation state transitions: observed, pending, complete, failed, filtered",
+			Help: "Attestation state transitions: observed, pending, complete, failed, filtered, minted",
 		}, attestationLabels),
 		AttestationPending: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "cctp_relayer_attestation_pending",
 			Help: "Number of attestations currently pending",
 		}, pendingLabels),
-		MintSuccess: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "cctp_relayer_mint_success_total",
-			Help: "Successful mints by destination chain/domain",
-		}, mintLabels),
 	}
 
 	reg.MustRegister(m.WalletBalance)
@@ -71,7 +65,6 @@ func InitPromMetrics(address string, port int16) *PromMetrics {
 	reg.MustRegister(m.FastTransferAllowance)
 	reg.MustRegister(m.AttestationTotal)
 	reg.MustRegister(m.AttestationPending)
-	reg.MustRegister(m.MintSuccess)
 
 	// Expose /metrics HTTP endpoint
 	go func() {
@@ -102,8 +95,8 @@ func (m *PromMetrics) SetFastTransferAllowance(domain, token string, allowance f
 	m.FastTransferAllowance.WithLabelValues(domain, token).Set(allowance)
 }
 
-func (m *PromMetrics) IncAttestation(status, srcDomain, destDomain string) {
-	m.AttestationTotal.WithLabelValues(status, srcDomain, destDomain).Inc()
+func (m *PromMetrics) IncAttestation(status, srcDomain, destDomain, destChain string) {
+	m.AttestationTotal.WithLabelValues(status, srcDomain, destDomain, destChain).Inc()
 }
 
 func (m *PromMetrics) IncPending(srcDomain, destDomain string) {
@@ -112,8 +105,4 @@ func (m *PromMetrics) IncPending(srcDomain, destDomain string) {
 
 func (m *PromMetrics) DecPending(srcDomain, destDomain string) {
 	m.AttestationPending.WithLabelValues(srcDomain, destDomain).Dec()
-}
-
-func (m *PromMetrics) IncMintSuccess(chain, domain string) {
-	m.MintSuccess.WithLabelValues(chain, domain).Inc()
 }
