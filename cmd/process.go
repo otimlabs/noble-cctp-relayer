@@ -8,18 +8,14 @@ import (
 	"strconv"
 	"time"
 
-	cctptypes "github.com/circlefin/noble-cctp/x/cctp/types"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
 
 	"cosmossdk.io/log"
-	"cosmossdk.io/math"
 
 	"github.com/strangelove-ventures/noble-cctp-relayer/circle"
-	"github.com/strangelove-ventures/noble-cctp-relayer/ethereum"
-	"github.com/strangelove-ventures/noble-cctp-relayer/noble"
+	"github.com/strangelove-ventures/noble-cctp-relayer/filters"
 	"github.com/strangelove-ventures/noble-cctp-relayer/relayer"
-	"github.com/strangelove-ventures/noble-cctp-relayer/solana"
 	"github.com/strangelove-ventures/noble-cctp-relayer/types"
 )
 
@@ -30,6 +26,9 @@ var State = types.NewStateMap()
 
 // SequenceMap maps the domain -> the equivalent minter account sequence or nonce
 var sequenceMap = types.NewSequenceMap()
+
+// filterRegistry holds all registered message filters
+var filterRegistry *types.FilterRegistry
 
 func Start(a *AppState) *cobra.Command {
 	cmd := &cobra.Command{
@@ -130,6 +129,11 @@ func Start(a *AppState) *cobra.Command {
 			}
 			circle.StartAllowanceMonitor(cmd.Context(), cfg.Circle, logger, domains, metrics)
 
+			// Initialize filter registry (includes legacy filters + custom filters)
+			if err := initializeFilters(cmd.Context(), cfg, logger, registeredDomains); err != nil {
+				return fmt.Errorf("failed to initialize filters: %w", err)
+			}
+
 			// spin up Processor worker pool
 			for i := 0; i < int(cfg.ProcessorWorkerCount); i++ {
 				go StartProcessor(cmd.Context(), a, registeredDomains, processingQueue, sequenceMap, metrics)
@@ -144,6 +148,13 @@ func Start(a *AppState) *cobra.Command {
 				err := c.CloseClients()
 				if err != nil {
 					logger.Error("Error closing clients", "error", err)
+				}
+			}
+
+			// Close filter registry
+			if filterRegistry != nil {
+				if err := filterRegistry.Close(); err != nil {
+					logger.Error("Error closing filter registry", "error", err)
 				}
 			}
 
@@ -204,10 +215,20 @@ func StartProcessor(
 			destDomain := fmt.Sprint(msg.DestDomain)
 			destChain := getChainName(registeredDomains, msg.DestDomain)
 
-			// if a filter's condition is met, mark as filtered
-			if FilterDisabledCCTPRoutes(cfg, logger, msg) ||
-				filterInvalidDestinationCallers(registeredDomains, logger, msg, cfg.DestinationCallerOnly) ||
-				filterLowTransfers(cfg, logger, msg) {
+			// Run all filters through the filter registry
+			shouldFilter := false
+			var filterReason string
+
+			if filterRegistry != nil {
+				filtered, reason := filterRegistry.Filter(ctx, msg)
+				if filtered {
+					shouldFilter = true
+					filterReason = reason
+				}
+			}
+
+			// Mark as filtered if any filter matched
+			if shouldFilter {
 				State.Mu.Lock()
 				prevStatus := msg.Status
 				msg.Status = types.Filtered
@@ -215,6 +236,9 @@ func StartProcessor(
 				// Only increment metric on first transition to filtered
 				if metrics != nil && prevStatus != types.Filtered {
 					metrics.IncAttestation("filtered", srcDomain, destDomain, destChain)
+				}
+				if filterReason != "" {
+					logger.Info("Message filtered", "tx", msg.SourceTxHash, "reason", filterReason)
 				}
 			}
 
@@ -349,96 +373,69 @@ func StartProcessor(
 	}
 }
 
-// filterDisabledCCTPRoutes returns true if we haven't enabled relaying from a source domain to a destination domain
-func FilterDisabledCCTPRoutes(cfg *types.Config, logger log.Logger, msg *types.MessageState) bool {
-	val, ok := cfg.EnabledRoutes[msg.SourceDomain]
-	if !ok {
-		logger.Info(fmt.Sprintf("Filtered tx %s because relaying from %d to %d is not enabled",
-			msg.SourceTxHash, msg.SourceDomain, msg.DestDomain))
-		return !ok
+// initializeFilters creates and initializes the filter registry with configured filters
+func initializeFilters(ctx context.Context, cfg *types.Config, logger log.Logger, registeredDomains map[types.Domain]types.Chain) error {
+	filterRegistry = types.NewFilterRegistry(logger)
+
+	// Register legacy filters as plugins
+	// 1. Route filter
+	routeFilter := filters.NewRouteFilter()
+	if err := routeFilter.Initialize(ctx, map[string]interface{}{
+		"enabled_routes": cfg.EnabledRoutes,
+	}, logger); err != nil {
+		return fmt.Errorf("failed to initialize route filter: %w", err)
 	}
-	for _, dd := range val {
-		if dd == msg.DestDomain {
-			return false
+	filterRegistry.Register(routeFilter)
+
+	// 2. Destination caller filter
+	destCallerFilter := filters.NewDestinationCallerFilter()
+	if err := destCallerFilter.Initialize(ctx, map[string]interface{}{
+		"registered_domains":      registeredDomains,
+		"destination_caller_only": cfg.DestinationCallerOnly,
+	}, logger); err != nil {
+		return fmt.Errorf("failed to initialize destination-caller filter: %w", err)
+	}
+	filterRegistry.Register(destCallerFilter)
+
+	// 3. Low transfer filter
+	lowTransferFilter := filters.NewLowTransferFilter()
+	if err := lowTransferFilter.Initialize(ctx, map[string]interface{}{
+		"chains": cfg.Chains,
+	}, logger); err != nil {
+		return fmt.Errorf("failed to initialize low-transfer filter: %w", err)
+	}
+	filterRegistry.Register(lowTransferFilter)
+
+	// Register user-configured filters from config
+	for _, filterCfg := range cfg.Filters {
+		if !filterCfg.Enabled {
+			logger.Debug("Skipping disabled filter", "name", filterCfg.Name)
+			continue
 		}
+
+		var filter types.MessageFilter
+		switch filterCfg.Name {
+		case "depositor-whitelist":
+			filter = filters.NewDepositorWhitelistFilter()
+		default:
+			logger.Info("Unknown filter type, skipping", "name", filterCfg.Name)
+			continue
+		}
+
+		if err := filter.Initialize(ctx, filterCfg.Config, logger); err != nil {
+			return fmt.Errorf("failed to initialize filter %s: %w", filterCfg.Name, err)
+		}
+
+		filterRegistry.Register(filter)
+		logger.Info("Registered custom filter", "name", filterCfg.Name)
 	}
-	logger.Info(fmt.Sprintf("Filtered tx %s because relaying from %d to %d is not enabled",
-		msg.SourceTxHash, msg.SourceDomain, msg.DestDomain))
-	return true
+
+	return nil
 }
 
-// filterInvalidDestinationCallers filters messages based on destination caller matching
-func filterInvalidDestinationCallers(registeredDomains map[types.Domain]types.Chain, logger log.Logger, msg *types.MessageState, destinationCallerOnly bool) bool {
-	chain, ok := registeredDomains[msg.DestDomain]
-	if !ok {
-		logger.Error("No chain registered for domain", "domain", msg.DestDomain)
-		return true
-	}
-
-	validCaller, address := chain.IsDestinationCaller(msg.DestinationCaller)
-
-	// Always accept transfers explicitly sent to our minter address
-	if validCaller {
-		return false
-	}
-
-	// destination-caller-only: reject all non-matching callers
-	// permissionless (default): accept 0x000...000, reject explicit mismatches
-	shouldFilter := destinationCallerOnly || address != ""
-
-	if shouldFilter {
-		logger.Info(fmt.Sprintf("Filtered tx %s from %d to %d: destination caller mismatch: %s",
-			msg.SourceTxHash, msg.SourceDomain, msg.DestDomain, address))
-	}
-
-	return shouldFilter
-}
-
-// filterLowTransfers returns true if the amount being transferred to the destination chain is lower than the min-mint-amount configured
-func filterLowTransfers(cfg *types.Config, logger log.Logger, msg *types.MessageState) bool {
-	bm, err := new(cctptypes.BurnMessage).Parse(msg.MsgBody)
-	if err != nil {
-		logger.Info("This is not a burn message", "err", err)
-		return true
-	}
-
-	// TODO: not assume that "noble" is domain 4, add "domain" to the noble chain config
-	var minBurnAmount uint64
-	if msg.DestDomain == types.Domain(4) {
-		nobleCfg, ok := cfg.Chains["noble"].(*noble.ChainConfig)
-		if !ok {
-			logger.Info("Chain named 'noble' not found in config, filtering transaction")
-			return true
-		}
-		minBurnAmount = nobleCfg.MinMintAmount
-	} else {
-		for _, chain := range cfg.Chains {
-			switch c := chain.(type) {
-			case *ethereum.ChainConfig:
-				if c.Domain == msg.DestDomain {
-					minBurnAmount = c.MinMintAmount
-				}
-			case *solana.ChainConfig:
-				if c.Domain == msg.DestDomain {
-					minBurnAmount = c.MinMintAmount
-				}
-			}
-		}
-	}
-
-	if bm.Amount.LT(math.NewIntFromUint64(minBurnAmount)) {
-		logger.Info(
-			"Filtered tx because the transfer amount is less than the minimum allowed amount",
-			"dest domain", msg.DestDomain,
-			"source_domain", msg.SourceDomain,
-			"source_tx", msg.SourceTxHash,
-			"amount", bm.Amount,
-			"min_amount", minBurnAmount,
-		)
-		return true
-	}
-
-	return false
+// InitializeFiltersForTest initializes filters for testing purposes
+func InitializeFiltersForTest(ctx context.Context, cfg *types.Config, logger log.Logger, registeredDomains map[types.Domain]types.Chain) error {
+	return initializeFilters(ctx, cfg, logger, registeredDomains)
 }
 
 func startAPI(a *AppState) {
