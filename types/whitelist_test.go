@@ -106,9 +106,9 @@ func TestNormalizeAddress(t *testing.T) {
 			expected: "",
 		},
 		{
-			name:     "invalid - no 0x prefix",
+			name:     "valid - no 0x prefix",
 			input:    "742d35cc6634c0532925a3b844bc9e7595f0beb0",
-			expected: "",
+			expected: "0x742d35cc6634c0532925a3b844bc9e7595f0beb0",
 		},
 		{
 			name:     "invalid - non-hex characters",

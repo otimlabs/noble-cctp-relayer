@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"cosmossdk.io/log"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 const (
@@ -133,26 +134,16 @@ func (wm *WhitelistManager) SetAddressesForTesting(addresses []string) {
 	wm.mu.Unlock()
 }
 
-// normalizeAddress converts an address to lowercase and validates format
+// normalizeAddress converts an address to lowercase and validates format using go-ethereum
 func normalizeAddress(address string) string {
 	// Trim whitespace
 	address = strings.TrimSpace(address)
 
-	// Convert to lowercase for case-insensitive comparison
-	address = strings.ToLower(address)
-
-	// Validate format: must be 42 characters (0x + 40 hex chars)
-	if len(address) != 42 || !strings.HasPrefix(address, "0x") {
+	// Validate using go-ethereum's common package
+	if !common.IsHexAddress(address) {
 		return ""
 	}
 
-	// Validate hex characters
-	for i := 2; i < len(address); i++ {
-		c := address[i]
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
-			return ""
-		}
-	}
-
-	return address
+	// Convert to common.Address and back to hex, then lowercase for case-insensitive matching
+	return strings.ToLower(common.HexToAddress(address).Hex())
 }
