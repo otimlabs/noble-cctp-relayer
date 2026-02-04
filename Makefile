@@ -20,7 +20,7 @@ GOBIN := $(GOPATH)/bin
 .PHONY: lint lint-fix test
 
 golangci_lint_cmd=golangci-lint
-golangci_version=v1.57.2
+golangci_version=v1.64.8
 
 lint:
 	@echo "🔍 Running linter"
