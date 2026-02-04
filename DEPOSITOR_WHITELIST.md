@@ -167,14 +167,35 @@ Headers:
 
 ## EVM Domain Detection
 
-The filter only applies to EVM source chains:
+The filter only applies to EVM source chains using the `isEVMDomain()` helper function:
+
+**EVM Chains (Filtered):**
 
 - **Domain 0**: Ethereum
 - **Domain 1**: Avalanche
-- **Domain 2**: Optimism
+- **Domain 2**: OP Mainnet
 - **Domain 3**: Arbitrum
+- **Domain 6**: Base
+- **Domain 7**: Polygon PoS
+- **Domain 10**: Unichain
+- **Domain 11**: Linea
+- **Domain 12**: Codex
+- **Domain 13**: Sonic
+- **Domain 14**: World Chain
+- **Domain 16**: Sei
+- **Domain 17**: BNB Smart Chain
+- **Domain 18**: XDC
+- **Domain 19**: HyperEVM
+- **Domain 21**: Ink
+- **Domain 22**: Plume
+- **Domain 26**: Arc Testnet
 
-Noble (domain 4) and Solana (domain 5) use different address formats and are not filtered.
+**Non-EVM Chains (Not Filtered):**
+
+- **Domain 4**: Noble
+- **Domain 5**: Solana
+- **Domain 15**: Monad
+- **Domain 25**: Starknet Testnet
 
 ## Error Handling
 

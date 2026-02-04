@@ -36,7 +36,7 @@ func NewWhitelistManager(apiKey, kvKey string, refreshInterval uint, logger log.
 		whitelist:       make(map[string]bool),
 		kvClient:        NewQuickNodeKVClient(apiKey),
 		kvKey:           kvKey,
-		refreshInterval: time.Duration(refreshInterval) * time.Second,
+		refreshInterval: time.Duration(refreshInterval) * time.Second, //nolint:gosec // G115: refreshInterval is config value, overflow extremely unlikely
 		logger:          logger,
 	}
 }
@@ -116,6 +116,21 @@ func (wm *WhitelistManager) Count() int {
 	wm.mu.RLock()
 	defer wm.mu.RUnlock()
 	return len(wm.whitelist)
+}
+
+// SetAddressesForTesting manually sets the whitelist (for testing only)
+func (wm *WhitelistManager) SetAddressesForTesting(addresses []string) {
+	newWhitelist := make(map[string]bool, len(addresses))
+	for _, addr := range addresses {
+		normalized := normalizeAddress(addr)
+		if normalized != "" {
+			newWhitelist[normalized] = true
+		}
+	}
+
+	wm.mu.Lock()
+	wm.whitelist = newWhitelist
+	wm.mu.Unlock()
 }
 
 // normalizeAddress converts an address to lowercase and validates format

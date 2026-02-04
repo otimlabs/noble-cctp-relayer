@@ -296,7 +296,7 @@ func TestEthBurnToNobleDeployed(t *testing.T) {
 		newBalance, err = getNobleAccountBalance(ctx, cc, destAddress, uusdcDenom)
 		require.NoError(t, err)
 		if originalNobleBalance+burnAmount.Uint64() == newBalance {
-			t.Logf("Successfully minted at https://testnet.mintscan.io/noble-testnet/account/" + destAddress)
+			t.Logf("%s", "Successfully minted at https://testnet.mintscan.io/noble-testnet/account/"+destAddress)
 			break
 		}
 		time.Sleep(3 * time.Second)
