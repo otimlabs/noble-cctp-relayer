@@ -6,8 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"cosmossdk.io/log"
 	"github.com/ethereum/go-ethereum/common"
+
+	"cosmossdk.io/log"
 )
 
 const (
