@@ -163,14 +163,6 @@ func Start(a *AppState) *cobra.Command {
 	return cmd
 }
 
-// getChainName returns the chain name for a given domain, or "unknown" if not registered
-func getChainName(registeredDomains map[types.Domain]types.Chain, domain types.Domain) string {
-	if chain, ok := registeredDomains[domain]; ok {
-		return chain.Name()
-	}
-	return "unknown"
-}
-
 // StartProcessor is the main processing pipeline.
 func StartProcessor(
 	ctx context.Context,
@@ -194,8 +186,7 @@ func StartProcessor(
 			for _, msg := range tx.Msgs {
 				msg.Status = types.Created
 				if metrics != nil {
-					destChain := getChainName(registeredDomains, msg.DestDomain)
-					metrics.IncAttestation("observed", fmt.Sprint(msg.SourceDomain), fmt.Sprint(msg.DestDomain), destChain)
+					metrics.IncAttestation("observed", fmt.Sprint(msg.SourceDomain), fmt.Sprint(msg.DestDomain))
 				}
 			}
 		}
@@ -211,7 +202,6 @@ func StartProcessor(
 		for _, msg := range tx.Msgs {
 			srcDomain := fmt.Sprint(msg.SourceDomain)
 			destDomain := fmt.Sprint(msg.DestDomain)
-			destChain := getChainName(registeredDomains, msg.DestDomain)
 
 			// Run all filters through the filter registry
 			shouldFilter := false
@@ -233,7 +223,7 @@ func StartProcessor(
 				State.Mu.Unlock()
 				// Only increment metric on first transition to filtered
 				if metrics != nil && prevStatus != types.Filtered {
-					metrics.IncAttestation("filtered", srcDomain, destDomain, destChain)
+					metrics.IncAttestation("filtered", srcDomain, destDomain)
 				}
 				if filterReason != "" {
 					logger.Info("Message filtered", "tx", msg.SourceTxHash, "reason", filterReason)
@@ -256,7 +246,7 @@ func StartProcessor(
 					msg.Updated = time.Now()
 					State.Mu.Unlock()
 					if metrics != nil {
-						metrics.IncAttestation("pending", srcDomain, destDomain, destChain)
+						metrics.IncAttestation("pending", srcDomain, destDomain)
 						metrics.IncPending(srcDomain, destDomain)
 					}
 					requeue = true
@@ -276,7 +266,7 @@ func StartProcessor(
 					msg.Updated = time.Now()
 					State.Mu.Unlock()
 					if metrics != nil {
-						metrics.IncAttestation("complete", srcDomain, destDomain, destChain)
+						metrics.IncAttestation("complete", srcDomain, destDomain)
 						if prevStatus == types.Pending {
 							metrics.DecPending(srcDomain, destDomain)
 						}
@@ -300,7 +290,7 @@ func StartProcessor(
 				default:
 					logger.Error("Attestation failed for unknown reason for 0x" + msg.IrisLookupID + ".  Status: " + response.Status)
 					if metrics != nil {
-						metrics.IncAttestation("failed", srcDomain, destDomain, destChain)
+						metrics.IncAttestation("failed", srcDomain, destDomain)
 					}
 				}
 			}
@@ -353,7 +343,7 @@ func StartProcessor(
 				for _, msg := range msgs {
 					srcDomain := fmt.Sprint(msg.SourceDomain)
 					destDomain := fmt.Sprint(domain)
-					metrics.IncAttestation("minted", srcDomain, destDomain, chain.Name())
+					metrics.IncAttestation("minted", srcDomain, destDomain)
 				}
 			}
 		}

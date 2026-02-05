@@ -28,7 +28,7 @@ func InitPromMetrics(address string, port int16) *PromMetrics {
 		heightLabels         = []string{"chain", "domain"}
 		broadcastErrorLabels = []string{"chain", "domain"}
 		allowanceLabels      = []string{"domain", "token"}
-		attestationLabels    = []string{"status", "source_domain", "dest_domain", "dest_chain"}
+		attestationLabels    = []string{"status", "source_domain", "dest_domain"}
 		pendingLabels        = []string{"source_domain", "dest_domain"}
 	)
 
@@ -95,8 +95,8 @@ func (m *PromMetrics) SetFastTransferAllowance(domain, token string, allowance f
 	m.FastTransferAllowance.WithLabelValues(domain, token).Set(allowance)
 }
 
-func (m *PromMetrics) IncAttestation(status, srcDomain, destDomain, destChain string) {
-	m.AttestationTotal.WithLabelValues(status, srcDomain, destDomain, destChain).Inc()
+func (m *PromMetrics) IncAttestation(status, srcDomain, destDomain string) {
+	m.AttestationTotal.WithLabelValues(status, srcDomain, destDomain).Inc()
 }
 
 func (m *PromMetrics) IncPending(srcDomain, destDomain string) {

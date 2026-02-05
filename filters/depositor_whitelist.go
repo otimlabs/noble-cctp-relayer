@@ -70,7 +70,10 @@ func (f *DepositorWhitelistFilter) Initialize(ctx context.Context, config map[st
 	f.kvKey = kvKey
 
 	refreshInterval := DefaultWhitelistRefreshInterval
-	if val, ok := config["refresh_interval"].(int); ok && val > 0 {
+	// YAML unmarshals numbers as float64, not int
+	if val, ok := config["refresh_interval"].(float64); ok && val > 0 {
+		refreshInterval = int(val)
+	} else if val, ok := config["refresh_interval"].(int); ok && val > 0 {
 		refreshInterval = val
 	}
 	f.refreshInterval = time.Duration(refreshInterval) * time.Second
