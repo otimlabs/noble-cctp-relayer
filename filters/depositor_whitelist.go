@@ -49,7 +49,15 @@ func (f *DepositorWhitelistFilter) Initialize(ctx context.Context, config map[st
 
 	providerConfig, ok := config["provider_config"].(map[string]interface{})
 	if !ok {
-		return fmt.Errorf("depositor-whitelist filter requires 'provider_config' in config")
+		// yaml.v2 unmarshals nested maps as map[interface{}]interface{}
+		if rawMap, ok2 := config["provider_config"].(map[interface{}]interface{}); ok2 {
+			providerConfig = make(map[string]interface{}, len(rawMap))
+			for k, v := range rawMap {
+				providerConfig[fmt.Sprintf("%v", k)] = v
+			}
+		} else {
+			return fmt.Errorf("depositor-whitelist filter requires 'provider_config' in config")
+		}
 	}
 
 	switch providerName {
