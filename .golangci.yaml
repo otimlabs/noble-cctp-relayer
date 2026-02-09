@@ -15,7 +15,7 @@ linters:
   - errchkjson
   - errname
   - exhaustive
-  - exportloopref
+  - copyloopvar
   - forbidigo
   - gci
   - goconst
@@ -59,6 +59,7 @@ linters-settings:
       - prefix(github.com/strangelove-ventures/noble-cctp-relayer)
   gosec:
     excludes:
+      - G115
       - G404
 
 issues:

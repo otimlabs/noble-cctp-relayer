@@ -4,6 +4,7 @@ type Config struct {
 	Chains        map[string]ChainConfig `yaml:"chains"`
 	EnabledRoutes map[Domain][]Domain    `yaml:"enabled-routes"`
 	Circle        CircleSettings         `yaml:"circle"`
+	Filters       []FilterConfig         `yaml:"filters"`
 
 	ProcessorWorkerCount  uint32 `yaml:"processor-worker-count"`
 	DestinationCallerOnly bool   `yaml:"destination-caller-only"`
@@ -16,6 +17,7 @@ type ConfigWrapper struct {
 	Chains        map[string]map[string]any `yaml:"chains"`
 	EnabledRoutes map[Domain][]Domain       `yaml:"enabled-routes"`
 	Circle        CircleSettings            `yaml:"circle"`
+	Filters       []FilterConfig            `yaml:"filters"`
 
 	ProcessorWorkerCount  uint32 `yaml:"processor-worker-count"`
 	DestinationCallerOnly bool   `yaml:"destination-caller-only"`
@@ -41,6 +43,13 @@ type CircleSettings struct {
 // GetAPIVersion returns the parsed API version
 func (c *CircleSettings) GetAPIVersion() (APIVersion, error) {
 	return ParseAPIVersion(c.APIVersion)
+}
+
+// FilterConfig represents the configuration for a message filter plugin
+type FilterConfig struct {
+	Name    string                 `yaml:"name"`
+	Enabled bool                   `yaml:"enabled"`
+	Config  map[string]interface{} `yaml:"config"`
 }
 
 type ChainConfig interface {

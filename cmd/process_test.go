@@ -58,6 +58,11 @@ func TestProcessDisabledCctpRoute(t *testing.T) {
 	sequenceMap := types.NewSequenceMap()
 	processingQueue = make(chan *types.TxState, 10)
 
+	cmd.FilterRegistry = types.NewFilterRegistry(a.Logger)
+	cmd.FilterRegistry.Register(&routeFilterMock{
+		enabledRoutes: map[types.Domain][]types.Domain{0: {1, 2, 3, 4}},
+	})
+
 	go cmd.StartProcessor(context.TODO(), a, registeredDomains, processingQueue, sequenceMap, nil)
 
 	emptyBz := make([]byte, 32)
@@ -91,6 +96,11 @@ func TestProcessInvalidDestinationCaller(t *testing.T) {
 	sequenceMap := types.NewSequenceMap()
 	processingQueue = make(chan *types.TxState, 10)
 
+	cmd.FilterRegistry = types.NewFilterRegistry(a.Logger)
+	cmd.FilterRegistry.Register(&destCallerFilterMock{
+		registeredDomains: registeredDomains,
+	})
+
 	go cmd.StartProcessor(context.TODO(), a, registeredDomains, processingQueue, sequenceMap, nil)
 
 	nonEmptyBytes := make([]byte, 31)
@@ -119,39 +129,70 @@ func TestProcessInvalidDestinationCaller(t *testing.T) {
 	require.Equal(t, types.Filtered, actualState.Msgs[0].Status)
 }
 
-// we want to filter out the transaction if the route is not enabled
 func TestFilterDisabledCCTPRoutes(t *testing.T) {
 	logger := log.NewLogger(os.Stdout, log.LevelOption(zerolog.DebugLevel))
+	ctx := context.Background()
 
-	var msgState types.MessageState
+	filterRegistry := types.NewFilterRegistry(logger)
+	filterRegistry.Register(&routeFilterMock{
+		enabledRoutes: map[types.Domain][]types.Domain{0: {1, 2}},
+	})
 
-	cfg := types.Config{
-		EnabledRoutes: map[types.Domain][]types.Domain{
-			0: {1, 2},
-		},
+	tests := []struct {
+		src, dst types.Domain
+		want     bool
+	}{
+		{0, 1, false},
+		{0, 3, true},
+		{3, 1, true},
 	}
 
-	// test enabled dest domain
-	msgState = types.MessageState{
-		SourceDomain: types.Domain(0),
-		DestDomain:   types.Domain(1),
+	for _, tt := range tests {
+		msg := types.MessageState{SourceDomain: tt.src, DestDomain: tt.dst}
+		filtered, _ := filterRegistry.Filter(ctx, &msg)
+		require.Equal(t, tt.want, filtered)
 	}
-	filterTx := cmd.FilterDisabledCCTPRoutes(&cfg, logger, &msgState)
-	require.False(t, filterTx)
-
-	// test NOT enabled dest domain
-	msgState = types.MessageState{
-		SourceDomain: types.Domain(0),
-		DestDomain:   types.Domain(3),
-	}
-	filterTx = cmd.FilterDisabledCCTPRoutes(&cfg, logger, &msgState)
-	require.True(t, filterTx)
-
-	// test NOT enabled source domain
-	msgState = types.MessageState{
-		SourceDomain: types.Domain(3),
-		DestDomain:   types.Domain(1),
-	}
-	filterTx = cmd.FilterDisabledCCTPRoutes(&cfg, logger, &msgState)
-	require.True(t, filterTx)
 }
+
+type routeFilterMock struct {
+	enabledRoutes map[types.Domain][]types.Domain
+}
+
+func (f *routeFilterMock) Name() string { return "route" }
+func (f *routeFilterMock) Initialize(ctx context.Context, config map[string]interface{}, logger log.Logger) error {
+	return nil
+}
+func (f *routeFilterMock) Filter(ctx context.Context, msg *types.MessageState) (bool, string, error) {
+	destDomains, ok := f.enabledRoutes[msg.SourceDomain]
+	if !ok {
+		return true, "source not enabled", nil
+	}
+	for _, dd := range destDomains {
+		if dd == msg.DestDomain {
+			return false, "", nil
+		}
+	}
+	return true, "dest not enabled", nil
+}
+func (f *routeFilterMock) Close() error { return nil }
+
+type destCallerFilterMock struct {
+	registeredDomains map[types.Domain]types.Chain
+}
+
+func (f *destCallerFilterMock) Name() string { return "destination-caller" }
+func (f *destCallerFilterMock) Initialize(ctx context.Context, config map[string]interface{}, logger log.Logger) error {
+	return nil
+}
+func (f *destCallerFilterMock) Filter(ctx context.Context, msg *types.MessageState) (bool, string, error) {
+	chain, ok := f.registeredDomains[msg.DestDomain]
+	if !ok {
+		return true, "no chain for dest domain", nil
+	}
+	validCaller, _ := chain.IsDestinationCaller(msg.DestinationCaller)
+	if validCaller {
+		return false, "", nil
+	}
+	return true, "invalid destination caller", nil
+}
+func (f *destCallerFilterMock) Close() error { return nil }

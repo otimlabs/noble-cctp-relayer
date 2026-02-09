@@ -143,4 +143,16 @@ circle:
 # Only process transfers explicitly sent to this relayer's minter address
 destination-caller-only: false
 
+# Message filters - apply validation rules to incoming messages
+filters:
+  # Depositor whitelist filter
+  - name: "depositor-whitelist"
+    enabled: true
+    config:
+      provider: "quicknode-kv"
+      provider_config:
+        api_key: "" # QuickNode API key
+      kv_key: "cctp-depositor-whitelist" # Key name in QuickNode KV store
+      refresh_interval: 300 # Refresh interval in seconds
+
 processor-worker-count: 16
