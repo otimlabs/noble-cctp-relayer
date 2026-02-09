@@ -154,6 +154,14 @@ func Start(a *AppState) *cobra.Command {
 	return cmd
 }
 
+// getChainName returns the chain name for a given domain, or "unknown" if not registered
+func getChainName(registeredDomains map[types.Domain]types.Chain, domain types.Domain) string {
+	if chain, ok := registeredDomains[domain]; ok {
+		return chain.Name()
+	}
+	return "unknown"
+}
+
 // StartProcessor is the main processing pipeline.
 func StartProcessor(
 	ctx context.Context,
@@ -176,6 +184,10 @@ func StartProcessor(
 			tx, _ = State.Load(dequeuedTx.TxHash)
 			for _, msg := range tx.Msgs {
 				msg.Status = types.Created
+				if metrics != nil {
+					destChain := getChainName(registeredDomains, msg.DestDomain)
+					metrics.IncAttestation("observed", fmt.Sprint(msg.SourceDomain), fmt.Sprint(msg.DestDomain), destChain)
+				}
 			}
 		}
 
@@ -188,13 +200,22 @@ func StartProcessor(
 		}
 
 		for _, msg := range tx.Msgs {
+			srcDomain := fmt.Sprint(msg.SourceDomain)
+			destDomain := fmt.Sprint(msg.DestDomain)
+			destChain := getChainName(registeredDomains, msg.DestDomain)
+
 			// if a filter's condition is met, mark as filtered
 			if FilterDisabledCCTPRoutes(cfg, logger, msg) ||
 				filterInvalidDestinationCallers(registeredDomains, logger, msg, cfg.DestinationCallerOnly) ||
 				filterLowTransfers(cfg, logger, msg) {
 				State.Mu.Lock()
+				prevStatus := msg.Status
 				msg.Status = types.Filtered
 				State.Mu.Unlock()
+				// Only increment metric on first transition to filtered
+				if metrics != nil && prevStatus != types.Filtered {
+					metrics.IncAttestation("filtered", srcDomain, destDomain, destChain)
+				}
 			}
 
 			// if the message is burned or pending, check for an attestation
@@ -212,6 +233,10 @@ func StartProcessor(
 					msg.Status = types.Pending
 					msg.Updated = time.Now()
 					State.Mu.Unlock()
+					if metrics != nil {
+						metrics.IncAttestation("pending", srcDomain, destDomain, destChain)
+						metrics.IncPending(srcDomain, destDomain)
+					}
 					requeue = true
 					continue
 				case response.Status == "pending_confirmations":
@@ -223,10 +248,17 @@ func StartProcessor(
 
 					// Update state under lock
 					State.Mu.Lock()
+					prevStatus := msg.Status
 					msg.Status = types.Attested
 					msg.Attestation = response.Attestation
 					msg.Updated = time.Now()
 					State.Mu.Unlock()
+					if metrics != nil {
+						metrics.IncAttestation("complete", srcDomain, destDomain, destChain)
+						if prevStatus == types.Pending {
+							metrics.DecPending(srcDomain, destDomain)
+						}
+					}
 
 					// Fetch message details for Fast Transfer expiration tracking
 					if apiVersion == types.APIVersionV2 {
@@ -245,6 +277,9 @@ func StartProcessor(
 					broadcastMsgs[msg.DestDomain] = append(broadcastMsgs[msg.DestDomain], msg)
 				default:
 					logger.Error("Attestation failed for unknown reason for 0x" + msg.IrisLookupID + ".  Status: " + response.Status)
+					if metrics != nil {
+						metrics.IncAttestation("failed", srcDomain, destDomain, destChain)
+					}
 				}
 			}
 
@@ -291,6 +326,14 @@ func StartProcessor(
 				msg.Updated = time.Now()
 			}
 			State.Mu.Unlock()
+
+			if metrics != nil {
+				for _, msg := range msgs {
+					srcDomain := fmt.Sprint(msg.SourceDomain)
+					destDomain := fmt.Sprint(domain)
+					metrics.IncAttestation("minted", srcDomain, destDomain, chain.Name())
+				}
+			}
 		}
 
 		// requeue txs, ensure not to exceed retry limit

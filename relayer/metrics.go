@@ -15,6 +15,8 @@ type PromMetrics struct {
 	LatestHeight          *prometheus.GaugeVec
 	BroadcastErrors       *prometheus.CounterVec
 	FastTransferAllowance *prometheus.GaugeVec
+	AttestationTotal      *prometheus.CounterVec
+	AttestationPending    *prometheus.GaugeVec
 }
 
 func InitPromMetrics(address string, port int16) *PromMetrics {
@@ -26,6 +28,8 @@ func InitPromMetrics(address string, port int16) *PromMetrics {
 		heightLabels         = []string{"chain", "domain"}
 		broadcastErrorLabels = []string{"chain", "domain"}
 		allowanceLabels      = []string{"domain", "token"}
+		attestationLabels    = []string{"status", "source_domain", "dest_domain", "dest_chain"}
+		pendingLabels        = []string{"source_domain", "dest_domain"}
 	)
 
 	m := &PromMetrics{
@@ -45,12 +49,22 @@ func InitPromMetrics(address string, port int16) *PromMetrics {
 			Name: "cctp_relayer_fast_transfer_allowance",
 			Help: "Current Fast Transfer allowance for a domain (v2 only)",
 		}, allowanceLabels),
+		AttestationTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "cctp_relayer_attestation_total",
+			Help: "Attestation state transitions: observed, pending, complete, failed, filtered, minted",
+		}, attestationLabels),
+		AttestationPending: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "cctp_relayer_attestation_pending",
+			Help: "Number of attestations currently pending",
+		}, pendingLabels),
 	}
 
 	reg.MustRegister(m.WalletBalance)
 	reg.MustRegister(m.LatestHeight)
 	reg.MustRegister(m.BroadcastErrors)
 	reg.MustRegister(m.FastTransferAllowance)
+	reg.MustRegister(m.AttestationTotal)
+	reg.MustRegister(m.AttestationPending)
 
 	// Expose /metrics HTTP endpoint
 	go func() {
@@ -79,4 +93,16 @@ func (m *PromMetrics) IncBroadcastErrors(chain, domain string) {
 
 func (m *PromMetrics) SetFastTransferAllowance(domain, token string, allowance float64) {
 	m.FastTransferAllowance.WithLabelValues(domain, token).Set(allowance)
+}
+
+func (m *PromMetrics) IncAttestation(status, srcDomain, destDomain, destChain string) {
+	m.AttestationTotal.WithLabelValues(status, srcDomain, destDomain, destChain).Inc()
+}
+
+func (m *PromMetrics) IncPending(srcDomain, destDomain string) {
+	m.AttestationPending.WithLabelValues(srcDomain, destDomain).Inc()
+}
+
+func (m *PromMetrics) DecPending(srcDomain, destDomain string) {
+	m.AttestationPending.WithLabelValues(srcDomain, destDomain).Dec()
 }
