@@ -50,7 +50,7 @@ func TestNewAllowanceMonitor_Defaults(t *testing.T) {
 	}
 
 	domains := []types.Domain{0, 1}
-	monitor := NewAllowanceMonitor(cfg, testLogger, domains, nil)
+	monitor := NewAllowanceMonitor(cfg, testLogger, domains, nil, nil)
 
 	require.NotNil(t, monitor)
 	require.Equal(t, "USDC", monitor.token)
@@ -68,7 +68,7 @@ func TestNewAllowanceMonitor_CustomSettings(t *testing.T) {
 	}
 
 	domains := []types.Domain{0}
-	monitor := NewAllowanceMonitor(cfg, testLogger, domains, nil)
+	monitor := NewAllowanceMonitor(cfg, testLogger, domains, nil, nil)
 
 	require.NotNil(t, monitor)
 	require.Equal(t, "EURC", monitor.token)
