@@ -27,9 +27,9 @@ func InitPromMetrics(address string, port int16) *PromMetrics {
 		walletLabels         = []string{"chain", "address", "denom"}
 		heightLabels         = []string{"chain", "domain"}
 		broadcastErrorLabels = []string{"chain", "domain"}
-		allowanceLabels      = []string{"domain", "token"}
-		attestationLabels    = []string{"status", "source_domain", "dest_domain"}
-		pendingLabels        = []string{"source_domain", "dest_domain"}
+		allowanceLabels      = []string{"chain", "domain", "token"}
+		attestationLabels    = []string{"src_chain", "dest_chain", "status", "source_domain", "dest_domain"}
+		pendingLabels        = []string{"src_chain", "dest_chain", "source_domain", "dest_domain"}
 	)
 
 	m := &PromMetrics{
@@ -91,18 +91,18 @@ func (m *PromMetrics) IncBroadcastErrors(chain, domain string) {
 	m.BroadcastErrors.WithLabelValues(chain, domain).Inc()
 }
 
-func (m *PromMetrics) SetFastTransferAllowance(domain, token string, allowance float64) {
-	m.FastTransferAllowance.WithLabelValues(domain, token).Set(allowance)
+func (m *PromMetrics) SetFastTransferAllowance(chain, domain, token string, allowance float64) {
+	m.FastTransferAllowance.WithLabelValues(chain, domain, token).Set(allowance)
 }
 
-func (m *PromMetrics) IncAttestation(status, srcDomain, destDomain string) {
-	m.AttestationTotal.WithLabelValues(status, srcDomain, destDomain).Inc()
+func (m *PromMetrics) IncAttestation(srcChain, destChain, status, srcDomain, destDomain string) {
+	m.AttestationTotal.WithLabelValues(srcChain, destChain, status, srcDomain, destDomain).Inc()
 }
 
-func (m *PromMetrics) IncPending(srcDomain, destDomain string) {
-	m.AttestationPending.WithLabelValues(srcDomain, destDomain).Inc()
+func (m *PromMetrics) IncPending(srcChain, destChain, srcDomain, destDomain string) {
+	m.AttestationPending.WithLabelValues(srcChain, destChain, srcDomain, destDomain).Inc()
 }
 
-func (m *PromMetrics) DecPending(srcDomain, destDomain string) {
-	m.AttestationPending.WithLabelValues(srcDomain, destDomain).Dec()
+func (m *PromMetrics) DecPending(srcChain, destChain, srcDomain, destDomain string) {
+	m.AttestationPending.WithLabelValues(srcChain, destChain, srcDomain, destDomain).Dec()
 }

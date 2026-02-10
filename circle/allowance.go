@@ -57,16 +57,17 @@ func (a *AllowanceState) Set(domain types.Domain, allowance *types.FastTransferA
 
 // AllowanceMonitor tracks Fast Transfer allowance across domains
 type AllowanceMonitor struct {
-	baseURL  string
-	logger   log.Logger
-	metrics  *relayer.PromMetrics
-	state    *AllowanceState
-	domains  []types.Domain
-	token    string
-	interval time.Duration
+	baseURL           string
+	logger            log.Logger
+	metrics           *relayer.PromMetrics
+	registeredDomains map[types.Domain]types.Chain
+	state             *AllowanceState
+	domains           []types.Domain
+	token             string
+	interval          time.Duration
 }
 
-func NewAllowanceMonitor(cfg types.CircleSettings, logger log.Logger, domains []types.Domain, metrics *relayer.PromMetrics) *AllowanceMonitor {
+func NewAllowanceMonitor(cfg types.CircleSettings, logger log.Logger, domains []types.Domain, metrics *relayer.PromMetrics, registeredDomains map[types.Domain]types.Chain) *AllowanceMonitor {
 	token := cfg.AllowanceMonitorToken
 	if token == "" {
 		token = "USDC"
@@ -77,13 +78,14 @@ func NewAllowanceMonitor(cfg types.CircleSettings, logger log.Logger, domains []
 	}
 
 	return &AllowanceMonitor{
-		baseURL:  cfg.AttestationBaseURL,
-		logger:   logger.With("component", "allowance-monitor"),
-		metrics:  metrics,
-		state:    NewAllowanceState(),
-		domains:  domains,
-		token:    token,
-		interval: time.Duration(interval) * time.Second,
+		baseURL:           cfg.AttestationBaseURL,
+		logger:            logger.With("component", "allowance-monitor"),
+		metrics:           metrics,
+		registeredDomains: registeredDomains,
+		state:             NewAllowanceState(),
+		domains:           domains,
+		token:             token,
+		interval:          time.Duration(interval) * time.Second,
 	}
 }
 
@@ -122,7 +124,14 @@ func (m *AllowanceMonitor) queryAllowances() {
 		// Export to Prometheus
 		if m.metrics != nil {
 			if val, err := strconv.ParseUint(allowance.Allowance.String(), 10, 64); err == nil {
-				m.metrics.SetFastTransferAllowance(fmt.Sprintf("%d", domain), m.token, float64(val)/1e6)
+				// Get chain name from domain - if registry available
+				chainName := "unknown"
+				if m.registeredDomains != nil {
+					if chain, exists := m.registeredDomains[domain]; exists && chain != nil {
+						chainName = chain.Name()
+					}
+				}
+				m.metrics.SetFastTransferAllowance(chainName, fmt.Sprintf("%d", domain), m.token, float64(val)/1e6)
 			}
 		}
 	}
@@ -130,7 +139,7 @@ func (m *AllowanceMonitor) queryAllowances() {
 
 // StartAllowanceMonitor starts background monitoring if v2 API and monitoring are enabled.
 // Returns nil if disabled, otherwise returns monitor instance running in background goroutine.
-func StartAllowanceMonitor(ctx context.Context, cfg types.CircleSettings, logger log.Logger, domains []types.Domain, metrics *relayer.PromMetrics) *AllowanceMonitor {
+func StartAllowanceMonitor(ctx context.Context, cfg types.CircleSettings, logger log.Logger, domains []types.Domain, metrics *relayer.PromMetrics, registeredDomains map[types.Domain]types.Chain) *AllowanceMonitor {
 	apiVersion, err := cfg.GetAPIVersion()
 	if err != nil {
 		logger.Error("Failed to parse API version for allowance monitoring", "error", err)
@@ -147,7 +156,7 @@ func StartAllowanceMonitor(ctx context.Context, cfg types.CircleSettings, logger
 		return nil
 	}
 
-	monitor := NewAllowanceMonitor(cfg, logger, domains, metrics)
+	monitor := NewAllowanceMonitor(cfg, logger, domains, metrics, nil)
 	go monitor.Start(ctx)
 	return monitor
 }

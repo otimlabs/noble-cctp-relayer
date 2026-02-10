@@ -91,11 +91,20 @@ func (f *DepositorWhitelistFilter) Initialize(ctx context.Context, config map[st
 		return err
 	}
 
+	initialCount := f.Count()
+	allAddresses := make([]string, 0, initialCount)
+	f.mu.RLock()
+	for addr := range f.whitelist {
+		allAddresses = append(allAddresses, addr)
+	}
+	f.mu.RUnlock()
+
 	f.logger.Info("Depositor whitelist filter initialized",
 		"provider", providerName,
 		"kv_key", f.kvKey,
 		"refresh_interval", f.refreshInterval,
-		"initial_count", f.Count())
+		"initial_count", initialCount,
+		"all_addresses", allAddresses)
 
 	go f.startRefresh(ctx)
 	return nil
@@ -116,8 +125,18 @@ func (f *DepositorWhitelistFilter) Filter(ctx context.Context, msg *types.Messag
 	if !f.isWhitelisted(depositor) {
 		reason := fmt.Sprintf("non-whitelisted depositor: %s (source_domain=%d, dest_domain=%d)",
 			depositor, msg.SourceDomain, msg.DestDomain)
+		f.logger.Debug("Message filtered by depositor whitelist",
+			"depositor", depositor,
+			"source_domain", msg.SourceDomain,
+			"dest_domain", msg.DestDomain,
+			"tx_hash", msg.SourceTxHash)
 		return true, reason, nil
 	}
+
+	f.logger.Info("Message passed depositor whitelist",
+		"depositor", depositor,
+		"source_domain", msg.SourceDomain,
+		"dest_domain", msg.DestDomain)
 
 	return false, "", nil
 }
@@ -147,7 +166,7 @@ func (f *DepositorWhitelistFilter) startRefresh(ctx context.Context) {
 			if err := f.refresh(ctx); err != nil {
 				f.logger.Error("Failed to refresh whitelist", "error", err)
 			} else {
-				f.logger.Debug("Whitelist refreshed", "count", f.Count())
+				f.logger.Info("Whitelist refreshed", "count", f.Count())
 			}
 		}
 	}
@@ -159,21 +178,59 @@ func (f *DepositorWhitelistFilter) refresh(ctx context.Context) error {
 		return err
 	}
 
-	newWhitelist := make(map[string]bool, len(addresses))
+	newWhitelist, skippedAddresses := make(map[string]bool, len(addresses)), []string{}
 	for _, addr := range addresses {
-		normalized := normalizeAddress(addr)
-		if normalized != "" {
+		if normalized := normalizeAddress(addr); normalized != "" {
 			newWhitelist[normalized] = true
+		} else {
+			skippedAddresses = append(skippedAddresses, addr)
 		}
 	}
+
+	if len(skippedAddresses) > 0 {
+		f.logger.Error("Skipped invalid addresses", "skipped_count", len(skippedAddresses), "skipped_addresses", skippedAddresses)
+	}
+
+	f.mu.RLock()
+	oldCount := len(f.whitelist)
+	oldWhitelist := make(map[string]bool)
+	for addr := range f.whitelist {
+		oldWhitelist[addr] = true
+	}
+	f.mu.RUnlock()
 
 	f.mu.Lock()
 	f.whitelist = newWhitelist
 	f.mu.Unlock()
 
-	if len(newWhitelist) == 0 {
-		f.logger.Info("Whitelist is empty after refresh")
+	newCount := len(newWhitelist)
+	addedAddresses, removedAddresses := []string{}, []string{}
+
+	for addr := range newWhitelist {
+		if !oldWhitelist[addr] {
+			addedAddresses = append(addedAddresses, addr)
+		}
 	}
+	for addr := range oldWhitelist {
+		if !newWhitelist[addr] {
+			removedAddresses = append(removedAddresses, addr)
+		}
+	}
+
+	if newCount == 0 {
+		f.logger.Info("Whitelist is empty after refresh")
+	} else {
+		allAddresses := make([]string, 0, newCount)
+		for addr := range newWhitelist {
+			allAddresses = append(allAddresses, addr)
+		}
+		f.logger.Info("Whitelist refresh addresses", "addresses", allAddresses, "total_count", newCount)
+	}
+
+	f.logger.Info("Whitelist refresh completed",
+		"previous_count", oldCount, "new_count", newCount, "change", newCount-oldCount,
+		"added_addresses", addedAddresses, "removed_addresses", removedAddresses)
+
 	return nil
 }
 
