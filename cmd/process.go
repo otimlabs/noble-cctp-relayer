@@ -188,7 +188,7 @@ func StartProcessor(
 			for _, msg := range tx.Msgs {
 				msg.Status = types.Created
 				if metrics != nil {
-					// Get chain names from domain mapping
+					// Set chain names
 					srcChain := unknownChain
 					if chain, exists := registeredDomains[msg.SourceDomain]; exists && chain != nil {
 						srcChain = chain.Name()
@@ -214,6 +214,16 @@ func StartProcessor(
 			srcDomain := fmt.Sprint(msg.SourceDomain)
 			destDomain := fmt.Sprint(msg.DestDomain)
 
+			// Set chain names
+			srcChain := unknownChain
+			if chain, exists := registeredDomains[msg.SourceDomain]; exists && chain != nil {
+				srcChain = chain.Name()
+			}
+			destChain := unknownChain
+			if chain, exists := registeredDomains[msg.DestDomain]; exists && chain != nil {
+				destChain = chain.Name()
+			}
+
 			// Run all filters through the filter registry
 			shouldFilter := false
 			var filterReason string
@@ -234,15 +244,6 @@ func StartProcessor(
 				State.Mu.Unlock()
 				// Only increment metric on first transition to filtered
 				if metrics != nil && prevStatus != types.Filtered {
-					// Get chain names from domain mapping
-					srcChain := unknownChain
-					if chain, exists := registeredDomains[msg.SourceDomain]; exists && chain != nil {
-						srcChain = chain.Name()
-					}
-					destChain := unknownChain
-					if chain, exists := registeredDomains[msg.DestDomain]; exists && chain != nil {
-						destChain = chain.Name()
-					}
 					metrics.IncAttestation(srcChain, destChain, "filtered", srcDomain, destDomain)
 				}
 				if filterReason != "" {
@@ -266,15 +267,6 @@ func StartProcessor(
 					msg.Updated = time.Now()
 					State.Mu.Unlock()
 					if metrics != nil {
-						// Get chain names from domain mapping
-						srcChain := unknownChain
-						if chain, exists := registeredDomains[msg.SourceDomain]; exists && chain != nil {
-							srcChain = chain.Name()
-						}
-						destChain := unknownChain
-						if chain, exists := registeredDomains[msg.DestDomain]; exists && chain != nil {
-							destChain = chain.Name()
-						}
 						metrics.IncAttestation(srcChain, destChain, "pending", srcDomain, destDomain)
 						metrics.IncPending(srcChain, destChain, srcDomain, destDomain)
 					}
@@ -295,15 +287,6 @@ func StartProcessor(
 					msg.Updated = time.Now()
 					State.Mu.Unlock()
 					if metrics != nil {
-						// Get chain names from domain mapping
-						srcChain := unknownChain
-						if chain, exists := registeredDomains[msg.SourceDomain]; exists && chain != nil {
-							srcChain = chain.Name()
-						}
-						destChain := unknownChain
-						if chain, exists := registeredDomains[msg.DestDomain]; exists && chain != nil {
-							destChain = chain.Name()
-						}
 						metrics.IncAttestation(srcChain, destChain, "complete", srcDomain, destDomain)
 						if prevStatus == types.Pending {
 							metrics.DecPending(srcChain, destChain, srcDomain, destDomain)
@@ -328,15 +311,6 @@ func StartProcessor(
 				default:
 					logger.Error("Attestation failed for unknown reason for 0x" + msg.IrisLookupID + ".  Status: " + response.Status)
 					if metrics != nil {
-						// Get chain names from domain mapping
-						srcChain := unknownChain
-						if chain, exists := registeredDomains[msg.SourceDomain]; exists && chain != nil {
-							srcChain = chain.Name()
-						}
-						destChain := unknownChain
-						if chain, exists := registeredDomains[msg.DestDomain]; exists && chain != nil {
-							destChain = chain.Name()
-						}
 						metrics.IncAttestation(srcChain, destChain, "failed", srcDomain, destDomain)
 					}
 				}
@@ -388,7 +362,9 @@ func StartProcessor(
 
 			if metrics != nil {
 				for _, msg := range msgs {
-					// Get chain names from domain mapping
+					srcDomain := fmt.Sprint(msg.SourceDomain)
+					destDomain := fmt.Sprint(domain)
+					// Set chain names for this specific message
 					srcChain := unknownChain
 					if chain, exists := registeredDomains[msg.SourceDomain]; exists && chain != nil {
 						srcChain = chain.Name()
@@ -397,8 +373,6 @@ func StartProcessor(
 					if chain, exists := registeredDomains[msg.DestDomain]; exists && chain != nil {
 						destChain = chain.Name()
 					}
-					srcDomain := fmt.Sprint(msg.SourceDomain)
-					destDomain := fmt.Sprint(domain)
 					metrics.IncAttestation(srcChain, destChain, "minted", srcDomain, destDomain)
 				}
 			}

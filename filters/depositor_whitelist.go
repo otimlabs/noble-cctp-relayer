@@ -178,9 +178,7 @@ func (f *DepositorWhitelistFilter) refresh(ctx context.Context) error {
 		return err
 	}
 
-	newWhitelist := make(map[string]bool, len(addresses))
-	var skippedAddresses []string
-
+	newWhitelist, skippedAddresses := make(map[string]bool, len(addresses)), []string{}
 	for _, addr := range addresses {
 		if normalized := normalizeAddress(addr); normalized != "" {
 			newWhitelist[normalized] = true
@@ -190,9 +188,7 @@ func (f *DepositorWhitelistFilter) refresh(ctx context.Context) error {
 	}
 
 	if len(skippedAddresses) > 0 {
-		f.logger.Error("Skipped invalid addresses during refresh",
-			"skipped_count", len(skippedAddresses),
-			"skipped_addresses", skippedAddresses)
+		f.logger.Error("Skipped invalid addresses", "skipped_count", len(skippedAddresses), "skipped_addresses", skippedAddresses)
 	}
 
 	f.mu.RLock()
@@ -208,15 +204,13 @@ func (f *DepositorWhitelistFilter) refresh(ctx context.Context) error {
 	f.mu.Unlock()
 
 	newCount := len(newWhitelist)
-	addedAddresses := make([]string, 0)
-	removedAddresses := make([]string, 0)
+	addedAddresses, removedAddresses := []string{}, []string{}
 
 	for addr := range newWhitelist {
 		if !oldWhitelist[addr] {
 			addedAddresses = append(addedAddresses, addr)
 		}
 	}
-
 	for addr := range oldWhitelist {
 		if !newWhitelist[addr] {
 			removedAddresses = append(removedAddresses, addr)
@@ -225,9 +219,7 @@ func (f *DepositorWhitelistFilter) refresh(ctx context.Context) error {
 
 	if newCount == 0 {
 		f.logger.Info("Whitelist is empty after refresh")
-	}
-
-	if newCount > 0 {
+	} else {
 		allAddresses := make([]string, 0, newCount)
 		for addr := range newWhitelist {
 			allAddresses = append(allAddresses, addr)
@@ -236,11 +228,8 @@ func (f *DepositorWhitelistFilter) refresh(ctx context.Context) error {
 	}
 
 	f.logger.Info("Whitelist refresh completed",
-		"previous_count", oldCount,
-		"new_count", newCount,
-		"change", newCount-oldCount,
-		"added_addresses", addedAddresses,
-		"removed_addresses", removedAddresses)
+		"previous_count", oldCount, "new_count", newCount, "change", newCount-oldCount,
+		"added_addresses", addedAddresses, "removed_addresses", removedAddresses)
 
 	return nil
 }
